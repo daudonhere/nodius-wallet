@@ -1,6 +1,8 @@
 node_modules
 dist
 *.tsbuildinfo
+backend/data/
+backend/dist/
 .DS_Store
 *.pem
 npm-debug.log*
