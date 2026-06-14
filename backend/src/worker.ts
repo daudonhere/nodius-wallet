@@ -1,6 +1,6 @@
 import { db } from './db/index'
 import { relayQueue, gasPool } from './db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 
 const CHAIN_RPCS: Record<number, string> = {
   1: process.env.ETH_RPC || 'https://eth.llamarpc.com',
@@ -36,12 +36,16 @@ async function processPendingRelays() {
   const pending = await db
     .select()
     .from(relayQueue)
-    .where(eq(relayQueue.status, 'pending'))
+    .where(and(eq(relayQueue.status, 'pending'), eq(relayQueue.relayType, 'raw')))
     .orderBy(relayQueue.createdAt)
     .limit(20)
 
   for (const entry of pending) {
     try {
+      if (!entry.signedTx) {
+        await db.update(relayQueue).set({ status: 'failed', error: 'No signed tx', completedAt: Date.now() }).where(eq(relayQueue.id, entry.id))
+        continue
+      }
       const txHash = await broadcastTx(entry.signedTx, entry.chainId)
       await db
         .update(relayQueue)

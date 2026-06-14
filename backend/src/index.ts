@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import {
   submitRelay,
+  submitMetaTx,
   getRelayStatus,
   getNonce,
   getGasPool,
@@ -10,6 +11,7 @@ import {
   markRelayComplete,
   markRelayFailed,
 } from './relayer'
+import { getRelayContractAddress, getRelayerAddress, getRelayerBalance } from './relayContract'
 import { initDb } from './db/index'
 import { startWorker } from './worker'
 
@@ -46,6 +48,35 @@ app.get('/relay/status/:id', async (c) => {
   if (!entry) return c.json({ error: 'Not found' }, 404)
 
   return c.json(entry)
+})
+
+app.post('/relay/meta-submit', async (c) => {
+  const body = await c.req.json()
+  const { walletId, source, chainId, target, value, data, nonce, deadline, signature } = body
+
+  if (!walletId || !source || !chainId || !target || value == null || !signature) {
+    return c.json({ error: 'Missing required fields: walletId, source, chainId, target, value, signature' }, 400)
+  }
+
+  const result = await submitMetaTx({ walletId, source, chainId, target, value, data: data || '0x', nonce: nonce || 0, deadline: deadline || 0, signature })
+  if (result.error) {
+    return c.json({ error: result.error }, 500)
+  }
+
+  return c.json(result, 201)
+})
+
+app.get('/relay/info/:chainId', async (c) => {
+  const chainId = parseInt(c.req.param('chainId'))
+  if (isNaN(chainId)) return c.json({ error: 'Invalid chainId' }, 400)
+
+  const contractAddress = getRelayContractAddress(chainId)
+  if (!contractAddress) return c.json({ error: 'Relay not configured for chain' }, 404)
+
+  const relayerAddress = await getRelayerAddress()
+  const relayerBalance = await getRelayerBalance(chainId)
+
+  return c.json({ chainId, contractAddress, relayerAddress, relayerBalance })
 })
 
 app.get('/relay/pending', async (c) => {

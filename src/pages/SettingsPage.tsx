@@ -1,7 +1,12 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { Search, Moon, Coins, Globe, Zap, Fuel, Fingerprint, BellRing, Blocks, LifeBuoy, LogOut, ChevronRight, Copy, Camera, QrCode, Rocket } from 'lucide-react'
+import { Search, Moon, Coins, Globe, Zap, Fuel, Fingerprint, BellRing, Blocks, LifeBuoy, LogOut, ChevronRight, Copy, Camera, QrCode, Rocket, BookUser, TrendingUp, Plus, X } from 'lucide-react'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useAddressStore } from '../stores/addressStore'
+import { useAlertStore } from '../stores/alertStore'
+import { requestPermission } from '../services/notifications'
 import type { GasSpeed } from '../types/settings'
+import AddressBookModal from '../components/AddressBookModal'
 
 function ToggleRow({ icon: Icon, label, description, enabled, onToggle }: {
   icon: typeof Moon; label: string; description?: string; enabled: boolean; onToggle: (v: boolean) => void
@@ -43,6 +48,13 @@ function ChevronRow({ icon: Icon, label, right }: { icon: typeof Moon; label: st
 
 export default function SettingsPage() {
   const s = useSettingsStore()
+  const { addresses } = useAddressStore()
+  const alerts = useAlertStore()
+  const [showAddressBook, setShowAddressBook] = useState(false)
+  const [showAddAlert, setShowAddAlert] = useState(false)
+  const [alertSymbol, setAlertSymbol] = useState('ETH')
+  const [alertPrice, setAlertPrice] = useState('')
+  const [alertDirection, setAlertDirection] = useState<'above' | 'below'>('above')
 
   return (
     <>
@@ -89,6 +101,11 @@ export default function SettingsPage() {
               <span className="text-xs font-semibold">{s.defaultNetwork}</span>
             </div>
           } />
+          <button onClick={() => setShowAddressBook(true)} className="w-full">
+            <ChevronRow icon={BookUser} label="Address Book" right={
+              <span className="text-xs font-semibold bg-surfaceLight px-2 py-1 rounded-md">{addresses.length} saved</span>
+            } />
+          </button>
         </div>
       </div>
 
@@ -129,8 +146,93 @@ export default function SettingsPage() {
         <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">Security &amp; Notifications</h3>
         <div className="bg-surface/50 border border-surfaceLight rounded-[20px] px-4">
           <ToggleRow icon={Fingerprint} label="Biometric Unlock" enabled={s.biometricUnlock} onToggle={s.setBiometricUnlock} />
-          <ToggleRow icon={BellRing} label="Push Notifications" description="Alerts & price movements" enabled={s.pushNotifications} onToggle={s.setPushNotifications} />
+          <ToggleRow icon={BellRing} label="Push Notifications" description="Alerts & price movements" enabled={s.pushNotifications} onToggle={(v) => { s.setPushNotifications(v); if (v) requestPermission() }} />
           <ChevronRow icon={Blocks} label="Connected dApps" right={<span className="text-xs font-semibold bg-surfaceLight px-2 py-1 rounded-md">3 Active</span>} />
+        </div>
+      </div>
+
+      <div className="px-5 mb-8">
+        <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">Price Alerts</h3>
+        <div className="bg-surface/50 border border-surfaceLight rounded-[20px] px-4">
+          {alerts.alerts.length === 0 ? (
+            <div className="py-4 text-center text-xs text-zinc-500">No price alerts set</div>
+          ) : (
+            alerts.alerts.map((a) => (
+              <div key={a.id} className="flex items-center justify-between py-3 border-b border-surfaceLight/50 last:border-b-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-300">
+                    <TrendingUp size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{a.symbol}</p>
+                    <p className="text-[11px] text-zinc-500">{a.direction === 'above' ? '>' : '<'} ${a.targetPrice.toLocaleString()}</p>
+                  </div>
+                </div>
+                <button onClick={() => alerts.removeAlert(a.id)} className="text-zinc-500 hover:text-red-400 transition-colors p-1">
+                  <X size={14} />
+                </button>
+              </div>
+            ))
+          )}
+          {!showAddAlert ? (
+            <button onClick={() => setShowAddAlert(true)} className="w-full flex items-center justify-center gap-2 py-3.5 text-sm font-semibold text-neon hover:text-white transition-colors">
+              <Plus size={16} /> Add Price Alert
+            </button>
+          ) : (
+            <div className="py-3 space-y-3">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <p className="text-[10px] text-zinc-500 mb-1 font-semibold uppercase">Coin</p>
+                  <input
+                    value={alertSymbol}
+                    onChange={(e) => setAlertSymbol(e.target.value.toUpperCase())}
+                    className="w-full bg-darkbg border border-surfaceLight rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-neon/50 transition-colors"
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] text-zinc-500 mb-1 font-semibold uppercase">Target Price ($)</p>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={alertPrice}
+                    onChange={(e) => setAlertPrice(e.target.value)}
+                    className="w-full bg-darkbg border border-surfaceLight rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-neon/50 transition-colors"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-1 bg-darkbg border border-surfaceLight p-1 rounded-xl">
+                {(['above', 'below'] as const).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setAlertDirection(d)}
+                    className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${alertDirection === d ? 'bg-neon/20 text-neon border border-neon/30' : 'text-zinc-400 hover:text-white'}`}
+                  >
+                    {d === 'above' ? 'Above' : 'Below'}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (alertSymbol && alertPrice) {
+                      alerts.addAlert(alertSymbol, parseFloat(alertPrice), alertDirection)
+                      setShowAddAlert(false)
+                      setAlertPrice('')
+                    }
+                  }}
+                  className="flex-1 py-2.5 bg-neon text-darkbg text-sm font-bold rounded-xl hover:bg-emerald-400 transition-colors"
+                >
+                  Save Alert
+                </button>
+                <button
+                  onClick={() => setShowAddAlert(false)}
+                  className="py-2.5 px-4 bg-surfaceLight text-zinc-400 text-sm font-semibold rounded-xl hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -146,6 +248,13 @@ export default function SettingsPage() {
         </div>
         <p className="text-center text-[11px] text-zinc-600 mt-6 font-mono">Neon Aggregator v1.2.4</p>
       </div>
+
+      {showAddressBook && (
+        <AddressBookModal
+          onSelect={() => {}}
+          onClose={() => setShowAddressBook(false)}
+        />
+      )}
     </>
   )
 }

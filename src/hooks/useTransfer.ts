@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { useAccount, useSendTransaction, useSignTransaction } from 'wagmi'
+import { useAccount, useSendTransaction, useSignTypedData } from 'wagmi'
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
 import { Connection, Transaction as SolanaTx } from '@solana/web3.js'
 import { transferSolana, transferTON } from '../services/transfer'
-import { submitRelayTx } from '../services/relay'
+import { submitRelayTx, submitMetaTx, getNonce, getRelayInfo, RELAY_EIP712_DOMAIN, RELAY_EXECUTE_TYPE } from '../services/relay'
+import { notifyTxSent } from '../services/notifications'
 import { useSettingsStore } from '../stores/settingsStore'
 
 type TransferState = 'idle' | 'signing' | 'broadcasting' | 'success' | 'error'
@@ -17,7 +18,7 @@ export function useTransfer() {
 
   const { address: evmAddress, chainId } = useAccount()
   const { sendTransactionAsync } = useSendTransaction()
-  const { signTransactionAsync } = useSignTransaction()
+  const { signTypedDataAsync } = useSignTypedData()
   const solanaWallet = useSolanaWallet()
   const tonAddress = useTonAddress()
   const [tonUI] = useTonConnectUI()
@@ -26,23 +27,51 @@ export function useTransfer() {
     if (!evmAddress || !sendTransactionAsync) throw new Error('EVM wallet not connected')
     setState('signing')
 
-    if (gasFeeRouting && signTransactionAsync && chainId) {
+    if (gasFeeRouting && signTypedDataAsync && chainId) {
       const value = BigInt(Math.floor(parseFloat(amount) * 1e18))
-      const signedTx = await signTransactionAsync({
-        to: to as `0x${string}`,
-        value,
-        chainId,
+
+      const [nonceData, relayInfo] = await Promise.all([
+        getNonce(evmAddress, chainId),
+        getRelayInfo(chainId),
+      ])
+      const nonce = nonceData?.nonce ?? 0
+      const contractAddress = relayInfo?.contractAddress
+      if (!contractAddress) throw new Error('Relay contract not available on this chain')
+      const deadline = Math.floor(Date.now() / 1000) + 3600
+
+      const signature = await signTypedDataAsync({
+        domain: {
+          ...RELAY_EIP712_DOMAIN,
+          chainId,
+          verifyingContract: contractAddress as `0x${string}`,
+        },
+        types: RELAY_EXECUTE_TYPE,
+        primaryType: 'Execute',
+        message: {
+          target: to as `0x${string}`,
+          value,
+          data: '0x',
+          nonce: BigInt(nonce),
+          deadline: BigInt(deadline),
+        },
       })
+
       setState('broadcasting')
-      const result = await submitRelayTx({
+      const result = await submitMetaTx({
         walletId: evmAddress,
         source: 'evm',
         chainId,
-        signedTx,
+        target: to,
+        value: value.toString(),
+        data: '0x',
+        nonce,
+        deadline,
+        signature,
       })
       if (result.txHash) {
         setTxHash(result.txHash)
         setState('success')
+        if (useSettingsStore.getState().pushNotifications) notifyTxSent(result.txHash, 'EVM')
       } else {
         throw new Error('Relay did not return tx hash')
       }
@@ -54,6 +83,7 @@ export function useTransfer() {
       })
       setTxHash(hash)
       setState('success')
+      if (useSettingsStore.getState().pushNotifications) notifyTxSent(hash, 'EVM')
     }
   }
 
@@ -98,6 +128,7 @@ export function useTransfer() {
       )
       setTxHash(hash)
       setState('success')
+      if (useSettingsStore.getState().pushNotifications) notifyTxSent(hash, 'Solana')
     }
   }
 
@@ -107,6 +138,7 @@ export function useTransfer() {
     const hash = await transferTON(amount, to, (tx) => tonUI.sendTransaction(tx))
     setTxHash(hash)
     setState('success')
+    if (useSettingsStore.getState().pushNotifications) notifyTxSent(hash, 'TON')
   }
 
   const reset = () => {

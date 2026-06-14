@@ -5,6 +5,9 @@ import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useTonAddress } from '@tonconnect/ui-react'
 import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js'
 import { fetchPrices, TRENDING_COINS } from '../services/price'
+import { notifyPriceAlert } from '../services/notifications'
+import { useSettingsStore } from '../stores/settingsStore'
+import { useAlertStore } from '../stores/alertStore'
 import type { TrendingCoin } from '../types/token'
 
 const solanaConnection = new Connection(
@@ -31,8 +34,31 @@ export function useBalances() {
   const SYMBOLS = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'AVAX', 'LINK', 'MATIC', 'ARB', 'DOGE', 'TON', 'UNI']
 
   useEffect(() => {
-    fetchPrices(SYMBOLS).then(setPrices)
-    const interval = setInterval(() => fetchPrices(SYMBOLS).then(setPrices), 30_000)
+    const fetchAndCheck = async () => {
+      const data = await fetchPrices(SYMBOLS)
+      setPrices(data)
+
+      if (!useSettingsStore.getState().pushNotifications) return
+
+      const alerts = useAlertStore.getState().alerts
+      const setPrice = useAlertStore.getState().setPrice
+      const markTriggered = useAlertStore.getState().markTriggered
+
+      for (const alert of alerts) {
+        if (alert.triggered) continue
+        const price = data[alert.symbol]?.price
+        if (price == null) continue
+        setPrice(alert.symbol, price)
+        const triggered = alert.direction === 'above' ? price >= alert.targetPrice : price <= alert.targetPrice
+        if (triggered) {
+          markTriggered(alert.id)
+          notifyPriceAlert(alert.symbol, price, alert.direction, alert.targetPrice)
+        }
+      }
+    }
+
+    fetchAndCheck()
+    const interval = setInterval(fetchAndCheck, 30_000)
     return () => clearInterval(interval)
   }, [])
 

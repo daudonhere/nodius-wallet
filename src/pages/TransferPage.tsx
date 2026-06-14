@@ -8,6 +8,7 @@ import BottomNavigation from '../components/BottomNavigation'
 import NeonButton from '../components/NeonButton'
 import TokenSelectButton from '../components/TokenSelectButton'
 import QuickAmount from '../components/QuickAmount'
+import AddressBookModal from '../components/AddressBookModal'
 import { useTransfer } from '../hooks/useTransfer'
 import { useBalances } from '../hooks/useBalances'
 
@@ -24,6 +25,7 @@ export default function TransferPage() {
   const [address, setAddress] = useState('')
   const [amount, setAmount] = useState('')
   const [network, setNetwork] = useState<Network>('Ethereum')
+  const [showAddressBook, setShowAddressBook] = useState(false)
 
   const { address: evmAddress } = useAccount()
   const solanaWallet = useSolanaWallet()
@@ -84,7 +86,10 @@ export default function TransferPage() {
                   <button className="w-9 h-9 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400 hover:text-neon hover:border-neon/30 transition-all border border-transparent">
                     <QrCode size={16} />
                   </button>
-                  <button className="w-9 h-9 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400 hover:text-neon hover:border-neon/30 transition-all border border-transparent">
+                  <button
+                    onClick={() => setShowAddressBook(true)}
+                    className="w-9 h-9 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400 hover:text-neon hover:border-neon/30 transition-all border border-transparent"
+                  >
                     <BookUser size={16} />
                   </button>
                 </div>
@@ -176,6 +181,16 @@ export default function TransferPage() {
         )}
       </main>
       <BottomNavigation />
+
+      {showAddressBook && (
+        <AddressBookModal
+          onSelect={(addr, chain) => {
+            setAddress(addr)
+            setNetwork(chain === 'evm' ? 'Ethereum' : chain === 'solana' ? 'Solana' : 'TON')
+          }}
+          onClose={() => setShowAddressBook(false)}
+        />
+      )}
     </div>
   )
 }

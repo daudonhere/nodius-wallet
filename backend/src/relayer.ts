@@ -1,6 +1,7 @@
-import { eq, and, sql } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { db } from './db/index'
 import { relayQueue, nonceTracker, gasPool } from './db/schema'
+import { executeRelayTx } from './relayContract'
 
 const CHAIN_RPCS: Record<number, string> = {
   1: process.env.ETH_RPC || 'https://eth.llamarpc.com',
@@ -155,6 +156,62 @@ export async function updateGasPoolBalance(chainId: number, symbol: string, bala
       .insert(gasPool)
       .values({ chainId, symbol, balance, threshold: '0.1' })
   }
+}
+
+export async function submitMetaTx(params: {
+  walletId: string
+  source: string
+  chainId: number
+  target: string
+  value: string
+  data: string
+  nonce: number
+  deadline: number
+  signature: string
+}): Promise<{ id: number; txHash?: string; error?: string }> {
+  const rpc = CHAIN_RPCS[params.chainId]
+  if (!rpc) return { id: 0, error: `Unsupported chain: ${params.chainId}` }
+
+  const maxRetries = 3
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const result = await executeRelayTx({
+        chainId: params.chainId,
+        target: params.target as `0x${string}`,
+        value: params.value,
+        data: params.data as `0x${string}`,
+        nonce: params.nonce,
+        deadline: params.deadline,
+        signature: params.signature as `0x${string}`,
+      })
+
+      const [entry] = await db.insert(relayQueue).values({
+        walletId: params.walletId,
+        source: params.source,
+        chainId: params.chainId,
+        relayType: 'meta',
+        target: params.target,
+        value: params.value,
+        calldata: params.data,
+        signature: params.signature,
+        nonce: params.nonce,
+        deadline: params.deadline,
+        status: 'submitted',
+        txHash: result.txHash,
+        createdAt: Date.now(),
+        submittedAt: Date.now(),
+      }).returning({ id: relayQueue.id })
+
+      return { id: entry.id, txHash: result.txHash }
+    } catch (err: any) {
+      if (attempt === maxRetries - 1) {
+        return { id: 0, error: err.message || 'Meta-tx relay failed' }
+      }
+    }
+  }
+
+  return { id: 0, error: 'Meta-tx relay failed' }
 }
 
 export async function listPendingRelays() {
