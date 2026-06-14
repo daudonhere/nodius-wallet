@@ -1,13 +1,11 @@
 import type { ReactNode } from 'react'
 import { Search, Moon, Coins, Globe, Zap, Fuel, Fingerprint, BellRing, Blocks, LifeBuoy, LogOut, ChevronRight, Copy, Camera, QrCode, Rocket } from 'lucide-react'
+import { useSettingsStore } from '../stores/settingsStore'
+import type { GasSpeed } from '../types/settings'
 
-type ToggleItem = {
-  icon: typeof Moon
-  label: string
-  description?: string
-}
-
-function ToggleRow({ icon: Icon, label, description }: ToggleItem) {
+function ToggleRow({ icon: Icon, label, description, enabled, onToggle }: {
+  icon: typeof Moon; label: string; description?: string; enabled: boolean; onToggle: (v: boolean) => void
+}) {
   return (
     <div className="flex items-center justify-between py-4 border-b border-surfaceLight/50">
       <div className="flex items-center gap-3.5">
@@ -19,9 +17,9 @@ function ToggleRow({ icon: Icon, label, description }: ToggleItem) {
           {description && <span className="text-[11px] text-zinc-500">{description}</span>}
         </div>
       </div>
-      <div className="w-12 h-6.5 bg-neon rounded-full relative cursor-pointer flex items-center px-0.5">
-        <div className="w-5.5 h-5.5 bg-black rounded-full absolute right-0.5 shadow-sm" />
-      </div>
+      <button onClick={() => onToggle(!enabled)} className={`w-12 h-6.5 rounded-full relative cursor-pointer flex items-center px-0.5 transition-colors ${enabled ? 'bg-neon' : 'bg-zinc-600'}`}>
+        <div className={`w-5.5 h-5.5 bg-black rounded-full absolute shadow-sm transition-all ${enabled ? 'right-0.5' : 'left-0.5'}`} />
+      </button>
     </div>
   )
 }
@@ -44,6 +42,8 @@ function ChevronRow({ icon: Icon, label, right }: { icon: typeof Moon; label: st
 }
 
 export default function SettingsPage() {
+  const s = useSettingsStore()
+
   return (
     <>
       <header className="sticky top-0 pt-14 px-5 pb-4 flex items-center justify-between z-20 bg-darkbg/85 backdrop-blur-[12px]" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
@@ -82,25 +82,20 @@ export default function SettingsPage() {
       <div className="px-5 mb-8">
         <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">General</h3>
         <div className="bg-surface/50 border border-surfaceLight rounded-[20px] px-4">
-          <ToggleRow icon={Moon} label="Dark Mode" description="Saves battery life" />
-          <ChevronRow icon={Coins} label="Local Currency" right={<span className="text-xs font-semibold uppercase">USD ($)</span>} />
-          <ChevronRow
-            icon={Globe}
-            label="Default Network"
-            right={
-              <div className="flex items-center gap-1.5 bg-surfaceLight px-2 py-1 rounded-md border border-white/5">
-                <div className="w-2 h-2 rounded-full bg-[#627EEA]" />
-                <span className="text-xs font-semibold">Ethereum</span>
-              </div>
-            }
-          />
+          <ChevronRow icon={Coins} label="Local Currency" right={<span className="text-xs font-semibold uppercase">{s.localCurrency.toUpperCase()} ({s.localCurrency === 'usd' ? '$' : '€'})</span>} />
+          <ChevronRow icon={Globe} label="Default Network" right={
+            <div className="flex items-center gap-1.5 bg-surfaceLight px-2 py-1 rounded-md border border-white/5">
+              <div className="w-2 h-2 rounded-full bg-[#627EEA]" />
+              <span className="text-xs font-semibold">{s.defaultNetwork}</span>
+            </div>
+          } />
         </div>
       </div>
 
       <div className="px-5 mb-8">
         <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">Transactions &amp; Fees</h3>
         <div className="bg-surface/50 border border-surfaceLight rounded-[20px] px-4">
-          <ToggleRow icon={Zap} label="0 Gas Fee Routing" description="Auto-select gasless paths" />
+          <ToggleRow icon={Zap} label="0 Gas Fee Routing" description="Auto-select gasless paths" enabled={s.gasFeeRouting} onToggle={s.setGasFeeRouting} />
           <div className="py-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3.5">
@@ -111,12 +106,20 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="bg-darkbg border border-surfaceLight p-1 rounded-xl flex gap-1">
-              <button className="flex-1 py-2.5 text-[13px] font-semibold rounded-lg text-zinc-400 hover:text-white transition-colors">Slow</button>
-              <button className="flex-1 py-2.5 text-[13px] font-semibold rounded-lg bg-surfaceLight text-white border border-white/5 shadow-sm">Normal</button>
-              <button className="flex-1 py-2.5 text-[13px] font-semibold rounded-lg text-zinc-400 hover:text-white transition-colors flex items-center justify-center gap-1.5">
-                <Rocket size={14} className="text-neon" />
-                Fast
-              </button>
+              {(['slow', 'normal', 'fast'] as GasSpeed[]).map((speed) => (
+                <button
+                  key={speed}
+                  onClick={() => s.setGasSpeed(speed)}
+                  className={`flex-1 py-2.5 text-[13px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                    s.gasSpeed === speed
+                      ? 'bg-surfaceLight text-white border border-white/5 shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {speed === 'fast' && <Rocket size={14} className="text-neon" />}
+                  {speed.charAt(0).toUpperCase() + speed.slice(1)}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -125,13 +128,9 @@ export default function SettingsPage() {
       <div className="px-5 mb-8">
         <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">Security &amp; Notifications</h3>
         <div className="bg-surface/50 border border-surfaceLight rounded-[20px] px-4">
-          <ToggleRow icon={Fingerprint} label="Biometric Unlock" />
-          <ToggleRow icon={BellRing} label="Push Notifications" description="Alerts & price movements" />
-          <ChevronRow
-            icon={Blocks}
-            label="Connected dApps"
-            right={<span className="text-xs font-semibold bg-surfaceLight px-2 py-1 rounded-md">3 Active</span>}
-          />
+          <ToggleRow icon={Fingerprint} label="Biometric Unlock" enabled={s.biometricUnlock} onToggle={s.setBiometricUnlock} />
+          <ToggleRow icon={BellRing} label="Push Notifications" description="Alerts & price movements" enabled={s.pushNotifications} onToggle={s.setPushNotifications} />
+          <ChevronRow icon={Blocks} label="Connected dApps" right={<span className="text-xs font-semibold bg-surfaceLight px-2 py-1 rounded-md">3 Active</span>} />
         </div>
       </div>
 
