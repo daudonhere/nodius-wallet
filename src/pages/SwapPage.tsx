@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { ArrowLeft, SlidersHorizontal, ChevronDown, ArrowDownUp, Info, Zap, ChevronRight, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useAccount, useSendTransaction } from 'wagmi'
+import { useAccount, useSendTransaction, useSignTransaction } from 'wagmi'
 import BottomNavigation from '../components/BottomNavigation'
 import NeonButton from '../components/NeonButton'
 import { getZeroXQuote } from '../services/swap'
+import { submitRelayTx } from '../services/relay'
 import { useBalances } from '../hooks/useBalances'
+import { useSettingsStore } from '../stores/settingsStore'
 import type { SwapQuote } from '../services/swap'
 
 const TOKENS = [
@@ -19,9 +21,11 @@ const formatUsd = (n: number) => '$' + n.toLocaleString('en-US', { minimumFracti
 
 export default function SwapPage() {
   const navigate = useNavigate()
-  const { address } = useAccount()
+  const { address, chainId } = useAccount()
   const { sendTransactionAsync } = useSendTransaction()
+  const { signTransactionAsync } = useSignTransaction()
   const { prices } = useBalances()
+  const gasFeeRouting = useSettingsStore((s) => s.gasFeeRouting)
 
   const [fromToken, setFromToken] = useState(TOKENS[0])
   const [toToken, setToToken] = useState(TOKENS[1])
@@ -30,6 +34,7 @@ export default function SwapPage() {
   const [loadingQuote, setLoadingQuote] = useState(false)
   const [sending, setSending] = useState(false)
   const [txHash, setTxHash] = useState('')
+  const [error, setError] = useState('')
 
   const fromPrice = prices[fromToken.symbol]?.price ?? 0
   const toPrice = prices[toToken.symbol]?.price ?? 0
@@ -46,22 +51,44 @@ export default function SwapPage() {
   const fetchQuote = async () => {
     if (!fromAmount || parseFloat(fromAmount) === 0) return
     setLoadingQuote(true)
+    setError('')
     const q = await getZeroXQuote(fromToken.address, toToken.address, BigInt(Math.floor(parseFloat(fromAmount) * 1e18)).toString())
     setQuote(q)
+    if (!q) setError('Could not fetch quote')
     setLoadingQuote(false)
   }
 
   const handleSwap = async () => {
-    if (!address || !sendTransactionAsync) return
+    if (!address || !quote?.tx) return
     setSending(true)
+    setError('')
+
     try {
-      const hash = await sendTransactionAsync({
-        to: quote!.tx.to as `0x${string}`,
-        data: quote!.tx.data as `0x${string}`,
-        value: BigInt(quote!.tx.value || '0'),
-      })
-      setTxHash(hash)
-    } catch {}
+      if (gasFeeRouting && signTransactionAsync && chainId) {
+        const signedTx = await signTransactionAsync({
+          to: quote.tx.to as `0x${string}`,
+          data: quote.tx.data as `0x${string}`,
+          value: BigInt(quote.tx.value || '0'),
+          chainId,
+        })
+        const result = await submitRelayTx({
+          walletId: address,
+          source: 'evm',
+          chainId,
+          signedTx,
+        })
+        setTxHash(result.txHash || '')
+      } else {
+        const hash = await sendTransactionAsync({
+          to: quote.tx.to as `0x${string}`,
+          data: quote.tx.data as `0x${string}`,
+          value: BigInt(quote.tx.value || '0'),
+        })
+        setTxHash(hash)
+      }
+    } catch {
+      setError('Transaction rejected or failed')
+    }
     setSending(false)
   }
 
@@ -161,11 +188,17 @@ export default function SwapPage() {
           <div className="flex justify-between items-center mb-3.5 text-[13px]">
             <span className="text-zinc-400 font-medium">Network Fee</span>
             <div className="flex items-center gap-2">
-              <span className="line-through text-zinc-600 font-mono">$5.40</span>
-              <div className="flex items-center gap-1 bg-neon/10 px-2 py-0.5 rounded-md">
-                <Zap size={12} className="text-neon" />
-                <span className="text-neon font-bold text-[11px] uppercase tracking-wide">Free</span>
-              </div>
+              {gasFeeRouting ? (
+                <>
+                  <span className="line-through text-zinc-600 font-mono">$5.40</span>
+                  <div className="flex items-center gap-1 bg-neon/10 px-2 py-0.5 rounded-md">
+                    <Zap size={12} className="text-neon" />
+                    <span className="text-neon font-bold text-[11px] uppercase tracking-wide">Free</span>
+                  </div>
+                </>
+              ) : (
+                <span className="font-mono text-zinc-200">$5.40</span>
+              )}
             </div>
           </div>
           <div className="flex justify-between items-center text-[13px]">
@@ -182,6 +215,8 @@ export default function SwapPage() {
             <p className="text-xs text-zinc-400">Quote: {quote.price} | Est. gas: {quote.estimatedGas}</p>
           </div>
         )}
+
+        {error && <p className="text-red-400 text-xs text-center mb-3">{error}</p>}
 
         <NeonButton onClick={quote ? handleSwap : fetchQuote} disabled={!address || sending || loadingQuote}>
           {loadingQuote ? <><Loader2 size={18} className="animate-spin" /> Getting Quote...</>

@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { useAccount, useSendTransaction } from 'wagmi'
+import { useAccount, useSendTransaction, useSignTransaction } from 'wagmi'
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
-import { Connection } from '@solana/web3.js'
+import { Connection, Transaction as SolanaTx } from '@solana/web3.js'
 import { transferSolana, transferTON } from '../services/transfer'
+import { submitRelayTx } from '../services/relay'
+import { useSettingsStore } from '../stores/settingsStore'
 
 type TransferState = 'idle' | 'signing' | 'broadcasting' | 'success' | 'error'
 
@@ -11,9 +13,11 @@ export function useTransfer() {
   const [state, setState] = useState<TransferState>('idle')
   const [txHash, setTxHash] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const gasFeeRouting = useSettingsStore((s) => s.gasFeeRouting)
 
-  const { address: evmAddress } = useAccount()
+  const { address: evmAddress, chainId } = useAccount()
   const { sendTransactionAsync } = useSendTransaction()
+  const { signTransactionAsync } = useSignTransaction()
   const solanaWallet = useSolanaWallet()
   const tonAddress = useTonAddress()
   const [tonUI] = useTonConnectUI()
@@ -21,22 +25,80 @@ export function useTransfer() {
   const sendEVM = async (to: string, amount: string) => {
     if (!evmAddress || !sendTransactionAsync) throw new Error('EVM wallet not connected')
     setState('signing')
-    setState('broadcasting')
-    const hash = await sendTransactionAsync({
-      to: to as `0x${string}`,
-      value: BigExp(amount, 18),
-    })
-    setTxHash(hash)
-    setState('success')
+
+    if (gasFeeRouting && signTransactionAsync && chainId) {
+      const value = BigInt(Math.floor(parseFloat(amount) * 1e18))
+      const signedTx = await signTransactionAsync({
+        to: to as `0x${string}`,
+        value,
+        chainId,
+      })
+      setState('broadcasting')
+      const result = await submitRelayTx({
+        walletId: evmAddress,
+        source: 'evm',
+        chainId,
+        signedTx,
+      })
+      if (result.txHash) {
+        setTxHash(result.txHash)
+        setState('success')
+      } else {
+        throw new Error('Relay did not return tx hash')
+      }
+    } else {
+      setState('broadcasting')
+      const hash = await sendTransactionAsync({
+        to: to as `0x${string}`,
+        value: BigInt(Math.floor(parseFloat(amount) * 1e18)),
+      })
+      setTxHash(hash)
+      setState('success')
+    }
   }
 
   const sendSolana = async (to: string, amount: string) => {
     if (!solanaWallet.publicKey || !solanaWallet.signTransaction) throw new Error('Solana wallet not connected')
     setState('signing')
+
     const conn = new Connection(import.meta.env.VITE_SOLANA_RPC || 'https://api.mainnet-beta.solana.com')
-    const hash = await transferSolana(solanaWallet.publicKey, to as any, amount, conn, solanaWallet.signTransaction)
-    setTxHash(hash)
-    setState('success')
+
+    if (gasFeeRouting) {
+      const lamports = Math.floor(parseFloat(amount) * 1e9)
+      const { SystemProgram } = await import('@solana/web3.js')
+      const ix = SystemProgram.transfer({
+        fromPubkey: solanaWallet.publicKey,
+        toPubkey: to as any,
+        lamports,
+      })
+      const blockhash = await conn.getLatestBlockhash()
+      const tx = new SolanaTx({
+        feePayer: solanaWallet.publicKey,
+        blockhash: blockhash.blockhash,
+        lastValidBlockHeight: blockhash.lastValidBlockHeight,
+      }).add(ix)
+      const signed = await solanaWallet.signTransaction(tx)
+      const serialized = Array.from(signed.serialize()).map(b => b.toString(16).padStart(2, '0')).join('')
+      setState('broadcasting')
+      const result = await submitRelayTx({
+        walletId: solanaWallet.publicKey.toBase58(),
+        source: 'solana',
+        chainId: 900,
+        signedTx: serialized,
+      })
+      if (result.txHash) {
+        setTxHash(result.txHash)
+        setState('success')
+      } else {
+        throw new Error('Relay did not return tx hash')
+      }
+    } else {
+      const hash = await transferSolana(
+        solanaWallet.publicKey, to as any, amount, conn, solanaWallet.signTransaction
+      )
+      setTxHash(hash)
+      setState('success')
+    }
   }
 
   const sendTON = async (to: string, amount: string) => {
@@ -58,10 +120,4 @@ export function useTransfer() {
     sendEVM, sendSolana, sendTON, reset,
     connected: !!evmAddress || !!solanaWallet.publicKey || !!tonAddress,
   }
-}
-
-function BigExp(value: string, decimals: number): bigint {
-  const [int, frac = ''] = value.split('.')
-  const padded = frac.padEnd(decimals, '0').slice(0, decimals)
-  return BigInt(int + padded)
 }

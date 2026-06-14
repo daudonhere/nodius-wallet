@@ -28,8 +28,12 @@ export function useBalances() {
   const [solBalance, setSolBalance] = useState<string>('')
   const [prices, setPrices] = useState<Record<string, { price: number; change24h: number }>>({})
 
+  const SYMBOLS = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'AVAX', 'LINK', 'MATIC', 'ARB', 'DOGE', 'TON', 'UNI']
+
   useEffect(() => {
-    fetchPrices(['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'AVAX', 'LINK', 'MATIC', 'ARB', 'DOGE', 'TON', 'UNI']).then(setPrices)
+    fetchPrices(SYMBOLS).then(setPrices)
+    const interval = setInterval(() => fetchPrices(SYMBOLS).then(setPrices), 30_000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -48,9 +52,9 @@ export function useBalances() {
     const p = prices[c.symbol]
     return {
       ...c,
-      price: p ? `$${p.price.toLocaleString()}` : '—',
-      change: p ? `${p.change24h >= 0 ? '+' : ''}${p.change24h.toFixed(2)}%` : '—',
-      up: p ? p.change24h >= 0 : true,
+      price: p?.price != null ? `$${p.price.toLocaleString()}` : '—',
+      change: p?.change24h != null ? `${p.change24h >= 0 ? '+' : ''}${p.change24h.toFixed(2)}%` : '—',
+      up: p?.change24h != null ? p.change24h >= 0 : true,
     }
   })
 

@@ -23,7 +23,7 @@ export async function fetchPrices(symbols: string[]): Promise<Record<string, { p
 
   for (const [symbol, id] of Object.entries(coinIds)) {
     const coin = data[id]
-    if (coin) result[symbol] = { price: coin.usd, change24h: coin.usd_24h_change ?? 0 }
+    if (coin?.usd != null) result[symbol] = { price: coin.usd, change24h: coin.usd_24h_change ?? 0 }
   }
 
   return result
