@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAccount, useSendTransaction, useSignTypedData } from 'wagmi'
+import { useAccount, useSendTransaction } from 'wagmi'
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
 import { Connection, Transaction as SolanaTx } from '@solana/web3.js'
@@ -19,7 +19,6 @@ export function useTransfer() {
 
   const { address: evmAddress, chainId } = useAccount()
   const { sendTransactionAsync } = useSendTransaction()
-  const { signTypedDataAsync } = useSignTypedData()
   const solanaWallet = useSolanaWallet()
   const tonAddress = useTonAddress()
   const [tonUI] = useTonConnectUI()
@@ -45,30 +44,42 @@ export function useTransfer() {
         if (!contractAddress) { setState('error'); setError('Relay contract not available on this chain'); return }
         const deadline = Math.floor(Date.now() / 1000) + 3600
 
-        const signature = await signTypedDataAsync({
-          domain: {
-            name: 'NodiusRelay',
-            version: '1',
-            chainId,
-            verifyingContract: getAddress(contractAddress),
-          },
-          types: {
-            Execute: [
-              { name: 'target', type: 'address' },
-              { name: 'value', type: 'uint256' },
-              { name: 'data', type: 'bytes' },
-              { name: 'nonce', type: 'uint256' },
-              { name: 'deadline', type: 'uint256' },
-            ],
-          },
-          primaryType: 'Execute',
-          message: {
-            target,
-            value,
-            data: '0x' as `0x${string}`,
-            nonce: BigInt(nonce),
-            deadline: BigInt(deadline),
-          },
+        const provider = window.ethereum
+        if (!provider) { setState('error'); setError('MetaMask not detected'); return }
+
+        const signature = await provider.request({
+          method: 'eth_signTypedData_v4',
+          params: [evmAddress, {
+            domain: {
+              name: 'NodiusRelay',
+              version: '1',
+              chainId,
+              verifyingContract: contractAddress,
+            },
+            types: {
+              EIP712Domain: [
+                { name: 'name', type: 'string' },
+                { name: 'version', type: 'string' },
+                { name: 'chainId', type: 'uint256' },
+                { name: 'verifyingContract', type: 'address' },
+              ],
+              Execute: [
+                { name: 'target', type: 'address' },
+                { name: 'value', type: 'uint256' },
+                { name: 'data', type: 'bytes' },
+                { name: 'nonce', type: 'uint256' },
+                { name: 'deadline', type: 'uint256' },
+              ],
+            },
+            primaryType: 'Execute',
+            message: {
+              target,
+              value: '0x' + value.toString(16),
+              data: '0x',
+              nonce: '0x' + BigInt(nonce).toString(16),
+              deadline: '0x' + BigInt(deadline).toString(16),
+            },
+          }],
         })
 
         setState('broadcasting')
