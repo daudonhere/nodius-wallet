@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAccount, useSendTransaction, useSignTypedData } from 'wagmi'
+import { useAccount, useSendTransaction, useWalletClient } from 'wagmi'
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
 import { Connection, Transaction as SolanaTx } from '@solana/web3.js'
@@ -18,7 +18,7 @@ export function useTransfer() {
 
   const { address: evmAddress, chainId } = useAccount()
   const { sendTransactionAsync } = useSendTransaction()
-  const { signTypedDataAsync } = useSignTypedData()
+  const { data: walletClient } = useWalletClient()
   const solanaWallet = useSolanaWallet()
   const tonAddress = useTonAddress()
   const [tonUI] = useTonConnectUI()
@@ -27,8 +27,9 @@ export function useTransfer() {
     if (!evmAddress || !sendTransactionAsync) throw new Error('EVM wallet not connected')
     setState('signing')
 
-    if (gasFeeRouting && signTypedDataAsync && chainId) {
+    if (gasFeeRouting && walletClient && chainId) {
       const value = BigInt(Math.floor(parseFloat(amount) * 1e18))
+      console.log('[useTransfer] gas-free flow starting', { chainId, to, amount })
 
       const [nonceData, relayInfo] = await Promise.all([
         getNonce(evmAddress, chainId),
@@ -39,7 +40,8 @@ export function useTransfer() {
       if (!contractAddress) throw new Error('Relay contract not available on this chain')
       const deadline = Math.floor(Date.now() / 1000) + 3600
 
-      const signature = await signTypedDataAsync({
+      const signature = await walletClient.signTypedData({
+        account: evmAddress,
         domain: {
           ...RELAY_EIP712_DOMAIN,
           chainId,

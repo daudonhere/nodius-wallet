@@ -11,6 +11,7 @@ import QuickAmount from '../components/QuickAmount'
 import AddressBookModal from '../components/AddressBookModal'
 import { useTransfer } from '../hooks/useTransfer'
 import { useBalances } from '../hooks/useBalances'
+import { useSettingsStore } from '../stores/settingsStore'
 
 type Network = 'Ethereum' | 'Solana' | 'TON'
 
@@ -32,6 +33,8 @@ export default function TransferPage() {
   const tonAddress = useTonAddress()
   const { tokens } = useBalances()
   const transfer = useTransfer()
+  const gasFeeRouting = useSettingsStore((s) => s.gasFeeRouting)
+  const setGasFeeRouting = useSettingsStore((s) => s.setGasFeeRouting)
 
   const isConnected = network === 'Ethereum' ? !!evmAddress
     : network === 'Solana' ? !!solanaWallet.publicKey
@@ -43,7 +46,9 @@ export default function TransferPage() {
       if (network === 'Ethereum') await transfer.sendEVM(address, amount)
       else if (network === 'Solana') await transfer.sendSolana(address, amount)
       else await transfer.sendTON(address, amount)
-    } catch {}
+    } catch (e: any) {
+      console.error('[TransferPage] transfer failed', e)
+    }
   }
 
   return (
@@ -150,12 +155,30 @@ export default function TransferPage() {
               <div className="flex justify-between items-center text-[13px]">
                 <span className="text-zinc-400 font-medium">Network Fee</span>
                 <div className="flex items-center gap-2">
-                  <span className="line-through text-zinc-600 font-mono">$2.40</span>
-                  <div className="flex items-center gap-1 bg-neon/10 px-2 py-0.5 rounded-md">
-                    <Zap size={12} className="text-neon" />
-                    <span className="text-neon font-bold text-[11px] uppercase tracking-wide">Free</span>
-                  </div>
+                  {gasFeeRouting ? (
+                    <>
+                      <span className="line-through text-zinc-600 font-mono">$2.40</span>
+                      <div className="flex items-center gap-1 bg-neon/10 px-2 py-0.5 rounded-md">
+                        <Zap size={12} className="text-neon" />
+                        <span className="text-neon font-bold text-[11px] uppercase tracking-wide">Free</span>
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-zinc-400 font-mono">Dynamic</span>
+                  )}
                 </div>
+              </div>
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-surfaceLight/50">
+                <div className="flex items-center gap-2">
+                  <Zap size={13} className={gasFeeRouting ? 'text-neon' : 'text-zinc-500'} />
+                  <span className="text-xs font-medium text-zinc-400">0 Gas Fee</span>
+                </div>
+                <button
+                  onClick={() => setGasFeeRouting(!gasFeeRouting)}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${gasFeeRouting ? 'bg-neon' : 'bg-zinc-600'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${gasFeeRouting ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
               </div>
             </div>
 

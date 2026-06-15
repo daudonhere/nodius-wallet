@@ -1,0 +1,41 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "/home/daudsmith/Documents/github/nodius-wallet/contracts/contracts/NodiusRelay.sol": {
+      "lastModificationDate": 1781472800671,
+      "contentHash": "c76899e2add9e5f0c4b93179a82522fc",
+      "sourceName": "contracts/NodiusRelay.sol",
+      "solcConfig": {
+        "version": "0.8.28",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.28"
+      ],
+      "artifacts": [
+        "NodiusRelay"
+      ]
+    }
+  }
+}
