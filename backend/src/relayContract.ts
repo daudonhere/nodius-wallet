@@ -28,6 +28,13 @@ const RELAY_CONTRACTS: Record<number, `0x${string}`> = {
 
 const RELAY_ABI = [
   {
+    inputs: [{ name: '', type: 'address' }],
+    name: 'nonces',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [
       { name: 'target', type: 'address' },
       { name: 'value', type: 'uint256' },
@@ -119,6 +126,19 @@ export function getRelayContractAddress(chainId: number): `0x${string}` | null {
 export async function getRelayerAddress(): Promise<`0x${string}`> {
   const account = privateKeyToAccount(RELAYER_PRIVATE_KEY)
   return account.address
+}
+
+export async function getContractNonce(walletAddress: `0x${string}`, chainId: number): Promise<number> {
+  const contractAddress = RELAY_CONTRACTS[chainId]
+  if (!contractAddress || contractAddress === '0x') return 0
+  const { publicClient } = getClients(chainId)
+  const nonce = await publicClient.readContract({
+    address: contractAddress,
+    abi: RELAY_ABI,
+    functionName: 'nonces',
+    args: [walletAddress],
+  })
+  return Number(nonce)
 }
 
 export async function getRelayerBalance(chainId: number): Promise<string> {

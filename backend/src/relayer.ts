@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm'
 import { db } from './db/index'
 import { relayQueue, nonceTracker, gasPool } from './db/schema'
-import { executeRelayTx } from './relayContract'
+import { executeRelayTx, getContractNonce } from './relayContract'
 
 const CHAIN_RPCS: Record<number, string> = {
   1: process.env.ETH_RPC || 'https://eth.llamarpc.com',
@@ -71,38 +71,8 @@ export async function getRelayStatus(id: number) {
 }
 
 export async function getNonce(walletAddress: string, chainId: number): Promise<number> {
-  const [tracker] = await db
-    .select()
-    .from(nonceTracker)
-    .where(and(eq(nonceTracker.walletAddress, walletAddress), eq(nonceTracker.chainId, chainId)))
-    .limit(1)
-
-  if (!tracker) {
-    const rpc = CHAIN_RPCS[chainId]
-    if (!rpc) return 0
-
-    try {
-      const res = await fetch(rpc, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'eth_getTransactionCount',
-          params: [walletAddress, 'pending'],
-        }),
-      })
-      const data = await res.json()
-      const onChainNonce = parseInt(data.result, 16)
-
-      await db.insert(nonceTracker).values({ walletAddress, chainId, nonce: onChainNonce })
-      return onChainNonce
-    } catch {
-      return 0
-    }
-  }
-
-  return tracker.nonce
+  const contractNonce = await getContractNonce(walletAddress as `0x${string}`, chainId)
+  return contractNonce
 }
 
 export async function incrementNonce(walletAddress: string, chainId: number): Promise<number> {
