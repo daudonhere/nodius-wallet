@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { useAccount, useSendTransaction, useWalletClient } from 'wagmi'
+import { useAccount, useSendTransaction } from 'wagmi'
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
 import { Connection, Transaction as SolanaTx } from '@solana/web3.js'
 import { transferSolana, transferTON } from '../services/transfer'
-import { submitRelayTx, submitMetaTx, getNonce, getRelayInfo, RELAY_EIP712_DOMAIN, RELAY_EXECUTE_TYPE } from '../services/relay'
+import { submitRelayTx, submitMetaTx, getNonce, getRelayInfo } from '../services/relay'
 import { notifyTxSent } from '../services/notifications'
 import { useSettingsStore } from '../stores/settingsStore'
 
@@ -18,74 +18,104 @@ export function useTransfer() {
 
   const { address: evmAddress, chainId } = useAccount()
   const { sendTransactionAsync } = useSendTransaction()
-  const { data: walletClient } = useWalletClient()
   const solanaWallet = useSolanaWallet()
   const tonAddress = useTonAddress()
   const [tonUI] = useTonConnectUI()
 
   const sendEVM = async (to: string, amount: string) => {
-    if (!evmAddress || !sendTransactionAsync) throw new Error('EVM wallet not connected')
-    setState('signing')
+    if (!evmAddress || !sendTransactionAsync) {
+      setState('error'); setError('EVM wallet not connected'); return
+    }
 
-    if (gasFeeRouting && walletClient && chainId) {
-      const value = BigInt(Math.floor(parseFloat(amount) * 1e18))
-      console.log('[useTransfer] gas-free flow starting', { chainId, to, amount })
+    try {
+      setState('signing')
 
-      const [nonceData, relayInfo] = await Promise.all([
-        getNonce(evmAddress, chainId),
-        getRelayInfo(chainId),
-      ])
-      const nonce = nonceData?.nonce ?? 0
-      const contractAddress = relayInfo?.contractAddress
-      if (!contractAddress) throw new Error('Relay contract not available on this chain')
-      const deadline = Math.floor(Date.now() / 1000) + 3600
+      if (gasFeeRouting && chainId) {
+        const value = BigInt(Math.floor(parseFloat(amount) * 1e18))
 
-      const signature = await walletClient.signTypedData({
-        account: evmAddress,
-        domain: {
-          ...RELAY_EIP712_DOMAIN,
+        const [nonceData, relayInfo] = await Promise.all([
+          getNonce(evmAddress, chainId),
+          getRelayInfo(chainId),
+        ])
+        const nonce = nonceData?.nonce ?? 0
+        const contractAddress = relayInfo?.contractAddress
+        if (!contractAddress) { setState('error'); setError('Relay contract not available on this chain'); return }
+        const deadline = Math.floor(Date.now() / 1000) + 3600
+
+        const eth = (window as any).ethereum
+        if (!eth) { setState('error'); setError('MetaMask not detected'); return }
+
+        const typedData = {
+          domain: {
+            name: 'NodiusRelay',
+            version: '1',
+            chainId,
+            verifyingContract: contractAddress,
+          },
+          types: {
+            EIP712Domain: [
+              { name: 'name', type: 'string' },
+              { name: 'version', type: 'string' },
+              { name: 'chainId', type: 'uint256' },
+              { name: 'verifyingContract', type: 'address' },
+            ],
+            Execute: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+              { name: 'nonce', type: 'uint256' },
+              { name: 'deadline', type: 'uint256' },
+            ],
+          },
+          primaryType: 'Execute',
+          message: {
+            target: to,
+            value: value.toString(),
+            data: '0x',
+            nonce: nonce.toString(),
+            deadline: deadline.toString(),
+          },
+        }
+
+        const signature = await eth.request({
+          method: 'eth_signTypedData_v4',
+          params: [evmAddress, JSON.stringify(typedData)],
+        })
+
+        setState('broadcasting')
+        const result = await submitMetaTx({
+          walletId: evmAddress,
+          source: 'evm',
           chainId,
-          verifyingContract: contractAddress as `0x${string}`,
-        },
-        types: RELAY_EXECUTE_TYPE,
-        primaryType: 'Execute',
-        message: {
-          target: to as `0x${string}`,
-          value,
+          target: to,
+          value: value.toString(),
           data: '0x',
-          nonce: BigInt(nonce),
-          deadline: BigInt(deadline),
-        },
-      })
-
-      setState('broadcasting')
-      const result = await submitMetaTx({
-        walletId: evmAddress,
-        source: 'evm',
-        chainId,
-        target: to,
-        value: value.toString(),
-        data: '0x',
-        nonce,
-        deadline,
-        signature,
-      })
-      if (result.txHash) {
-        setTxHash(result.txHash)
-        setState('success')
-        if (useSettingsStore.getState().pushNotifications) notifyTxSent(result.txHash, 'EVM')
+          nonce,
+          deadline,
+          signature,
+        })
+        if (result.txHash) {
+          setTxHash(result.txHash)
+          setState('success')
+          if (useSettingsStore.getState().pushNotifications) notifyTxSent(result.txHash, 'EVM')
+        } else {
+          setState('error'); setError('Relay did not return tx hash')
+        }
       } else {
-        throw new Error('Relay did not return tx hash')
+        setState('broadcasting')
+        const hash = await sendTransactionAsync({
+          to: to as `0x${string}`,
+          value: BigInt(Math.floor(parseFloat(amount) * 1e18)),
+        })
+        setTxHash(hash)
+        setState('success')
+        if (useSettingsStore.getState().pushNotifications) notifyTxSent(hash, 'EVM')
       }
-    } else {
-      setState('broadcasting')
-      const hash = await sendTransactionAsync({
-        to: to as `0x${string}`,
-        value: BigInt(Math.floor(parseFloat(amount) * 1e18)),
-      })
-      setTxHash(hash)
-      setState('success')
-      if (useSettingsStore.getState().pushNotifications) notifyTxSent(hash, 'EVM')
+    } catch (e: any) {
+      const msg = e?.message || e?.toString() || 'Unknown error'
+      console.error('[useTransfer] EVM error:', msg)
+      setState('error')
+      setError(msg)
     }
   }
 
