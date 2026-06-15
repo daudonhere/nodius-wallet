@@ -2,12 +2,12 @@ import { Copy, MoreVertical, ArrowDownToLine, Power, Plus, TrendingUp, Wallet } 
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useTonAddress, useTonConnectModal } from '@tonconnect/ui-react'
-import { injected } from 'wagmi/connectors'
+
 import { useBalances } from '../hooks/useBalances'
 
 export default function WalletPage() {
   const { address: evmAddress, isConnected: evmConnected } = useAccount()
-  const { connect: evmConnect } = useConnect()
+  const { connect: evmConnect, connectors } = useConnect()
   const { disconnect: evmDisconnect } = useDisconnect()
   const solanaWallet = useSolanaWallet()
   const tonModal = useTonConnectModal()
@@ -140,7 +140,8 @@ export default function WalletPage() {
 
         <button
           onClick={() => {
-            if (!evmConnected) evmConnect({ connector: injected() })
+            const mmConnector = connectors.find(c => c.id === 'metaMask')
+            if (!evmConnected && mmConnector) evmConnect({ connector: mmConnector })
             if (!solanaWallet.connected && solanaWallet.wallets.length > 0) solanaWallet.select(solanaWallet.wallets[0]?.adapter.name ?? '')
             if (!tonAddress) tonModal.open()
           }}
