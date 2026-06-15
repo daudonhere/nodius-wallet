@@ -47,48 +47,43 @@ export function useTransfer() {
         const provider = window.ethereum
         if (!provider) { setState('error'); setError('MetaMask not detected'); return }
 
-        const accounts = await provider.request({ method: 'eth_requestAccounts' })
-        const metaMaskAccount = (accounts as string[])[0]?.toLowerCase()
-        console.log('[useTransfer] evmAddress:', evmAddress?.toLowerCase())
-        console.log('[useTransfer] MetaMask accounts[0]:', metaMaskAccount)
-        if (evmAddress?.toLowerCase() !== metaMaskAccount) {
-          console.warn('[useTransfer] Account mismatch! Using MetaMask account for signing.')
+        const signer = getAddress(evmAddress)
+
+        const typedData = {
+          domain: {
+            name: 'NodiusRelay',
+            version: '1',
+            chainId,
+            verifyingContract: contractAddress,
+          },
+          types: {
+            EIP712Domain: [
+              { name: 'name', type: 'string' },
+              { name: 'version', type: 'string' },
+              { name: 'chainId', type: 'uint256' },
+              { name: 'verifyingContract', type: 'address' },
+            ],
+            Execute: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+              { name: 'nonce', type: 'uint256' },
+              { name: 'deadline', type: 'uint256' },
+            ],
+          },
+          primaryType: 'Execute',
+          message: {
+            target,
+            value: '0x' + value.toString(16),
+            data: '0x',
+            nonce: '0x' + BigInt(nonce).toString(16),
+            deadline: '0x' + BigInt(deadline).toString(16),
+          },
         }
-        const signer = metaMaskAccount || evmAddress?.toLowerCase()
 
         const signature = await provider.request({
           method: 'eth_signTypedData_v4',
-          params: [signer, {
-            domain: {
-              name: 'NodiusRelay',
-              version: '1',
-              chainId,
-              verifyingContract: contractAddress,
-            },
-            types: {
-              EIP712Domain: [
-                { name: 'name', type: 'string' },
-                { name: 'version', type: 'string' },
-                { name: 'chainId', type: 'uint256' },
-                { name: 'verifyingContract', type: 'address' },
-              ],
-              Execute: [
-                { name: 'target', type: 'address' },
-                { name: 'value', type: 'uint256' },
-                { name: 'data', type: 'bytes' },
-                { name: 'nonce', type: 'uint256' },
-                { name: 'deadline', type: 'uint256' },
-              ],
-            },
-            primaryType: 'Execute',
-            message: {
-              target,
-              value: '0x' + value.toString(16),
-              data: '0x',
-              nonce: '0x' + BigInt(nonce).toString(16),
-              deadline: '0x' + BigInt(deadline).toString(16),
-            },
-          }],
+          params: [signer, JSON.stringify(typedData)],
         })
 
         setState('broadcasting')
