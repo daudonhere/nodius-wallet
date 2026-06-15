@@ -8,6 +8,8 @@ const CHAIN_RPCS: Record<number, string> = {
   137: process.env.POLYGON_RPC || 'https://polygon.llamarpc.com',
   42161: process.env.ARBITRUM_RPC || 'https://arbitrum.llamarpc.com',
   8453: process.env.BASE_RPC || 'https://base.llamarpc.com',
+  11155111: `https://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY || ''}`,
+  84532: 'https://sepolia.base.org',
 }
 
 export async function submitRelay(
