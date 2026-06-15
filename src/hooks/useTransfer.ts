@@ -47,9 +47,18 @@ export function useTransfer() {
         const provider = window.ethereum
         if (!provider) { setState('error'); setError('MetaMask not detected'); return }
 
+        const accounts = await provider.request({ method: 'eth_requestAccounts' })
+        const metaMaskAccount = (accounts as string[])[0]?.toLowerCase()
+        console.log('[useTransfer] evmAddress:', evmAddress?.toLowerCase())
+        console.log('[useTransfer] MetaMask accounts[0]:', metaMaskAccount)
+        if (evmAddress?.toLowerCase() !== metaMaskAccount) {
+          console.warn('[useTransfer] Account mismatch! Using MetaMask account for signing.')
+        }
+        const signer = metaMaskAccount || evmAddress?.toLowerCase()
+
         const signature = await provider.request({
           method: 'eth_signTypedData_v4',
-          params: [evmAddress, {
+          params: [signer, {
             domain: {
               name: 'NodiusRelay',
               version: '1',
