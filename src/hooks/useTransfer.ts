@@ -5,6 +5,7 @@ import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
 import { Connection, Transaction as SolanaTx } from '@solana/web3.js'
 import { transferSolana, transferTON } from '../services/transfer'
 import { submitRelayTx, submitMetaTx, getNonce, getRelayInfo } from '../services/relay'
+import { getAddress } from 'viem'
 import { notifyTxSent } from '../services/notifications'
 import { useSettingsStore } from '../stores/settingsStore'
 
@@ -32,6 +33,7 @@ export function useTransfer() {
       setState('signing')
 
       if (gasFeeRouting && chainId) {
+        const target = getAddress(to.trim())
         const value = BigInt(Math.floor(parseFloat(amount) * 1e18))
 
         const [nonceData, relayInfo] = await Promise.all([
@@ -48,7 +50,7 @@ export function useTransfer() {
             name: 'NodiusRelay',
             version: '1',
             chainId,
-            verifyingContract: contractAddress as `0x${string}`,
+            verifyingContract: getAddress(contractAddress),
           },
           types: {
             Execute: [
@@ -61,7 +63,7 @@ export function useTransfer() {
           },
           primaryType: 'Execute',
           message: {
-            target: to as `0x${string}`,
+            target,
             value,
             data: '0x' as `0x${string}`,
             nonce: BigInt(nonce),
@@ -74,7 +76,7 @@ export function useTransfer() {
           walletId: evmAddress,
           source: 'evm',
           chainId,
-          target: to,
+          target,
           value: value.toString(),
           data: '0x',
           nonce,
@@ -91,7 +93,7 @@ export function useTransfer() {
       } else {
         setState('broadcasting')
         const hash = await sendTransactionAsync({
-          to: to as `0x${string}`,
+          to: getAddress(to.trim()),
           value: BigInt(Math.floor(parseFloat(amount) * 1e18)),
         })
         setTxHash(hash)
