@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { ArrowLeft, SlidersHorizontal, ChevronDown, ArrowDownUp, Info, Zap, ChevronRight, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useAccount, useSendTransaction, useSignTransaction } from 'wagmi'
+import { useSendTransaction, useSignTypedData } from '@privy-io/react-auth'
+import { useWalletConnection } from '../hooks/useWalletConnection'
 import BottomNavigation from '../components/BottomNavigation'
 import NeonButton from '../components/NeonButton'
 import { getZeroXQuote } from '../services/swap'
@@ -21,9 +22,9 @@ const formatUsd = (n: number) => '$' + n.toLocaleString('en-US', { minimumFracti
 
 export default function SwapPage() {
   const navigate = useNavigate()
-  const { address, chainId } = useAccount()
-  const { sendTransactionAsync } = useSendTransaction()
-  const { signTransactionAsync } = useSignTransaction()
+  const { evm } = useWalletConnection()
+  const { sendTransaction } = useSendTransaction()
+  const { signTypedData } = useSignTypedData()
   const { prices } = useBalances()
   const gasFeeRouting = useSettingsStore((s) => s.gasFeeRouting)
 
@@ -59,27 +60,52 @@ export default function SwapPage() {
   }
 
   const handleSwap = async () => {
-    if (!address || !quote?.tx) return
+    if (!evm.address || !quote?.tx) return
     setSending(true)
     setError('')
 
     try {
-      if (gasFeeRouting && signTransactionAsync && chainId) {
-        const signedTx = await signTransactionAsync({
-          to: quote.tx.to as `0x${string}`,
-          data: quote.tx.data as `0x${string}`,
-          value: BigInt(quote.tx.value || '0'),
-          chainId,
+      if (gasFeeRouting && evm.chainId) {
+        const { signature } = await signTypedData({
+          domain: {
+            name: 'NodiusRelay',
+            version: '1',
+            chainId: evm.chainId,
+            verifyingContract: quote.tx.to as `0x${string}`,
+          },
+          types: {
+            EIP712Domain: [
+              { name: 'name', type: 'string' },
+              { name: 'version', type: 'string' },
+              { name: 'chainId', type: 'uint256' },
+              { name: 'verifyingContract', type: 'address' },
+            ],
+            Execute: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+              { name: 'nonce', type: 'uint256' },
+              { name: 'deadline', type: 'uint256' },
+            ],
+          },
+          primaryType: 'Execute',
+          message: {
+            target: quote.tx.to as `0x${string}`,
+            value: `0x${BigInt(quote.tx.value || '0').toString(16)}`,
+            data: quote.tx.data as `0x${string}`,
+            nonce: '0x0',
+            deadline: `0x${BigInt(Math.floor(Date.now() / 1000) + 3600).toString(16)}`,
+          },
         })
         const result = await submitRelayTx({
-          walletId: address,
+          walletId: evm.address,
           source: 'evm',
-          chainId,
-          signedTx,
+          chainId: evm.chainId,
+          signedTx: signature,
         })
         setTxHash(result.txHash || '')
       } else {
-        const hash = await sendTransactionAsync({
+        const { hash } = await sendTransaction({
           to: quote.tx.to as `0x${string}`,
           data: quote.tx.data as `0x${string}`,
           value: BigInt(quote.tx.value || '0'),
@@ -109,7 +135,7 @@ export default function SwapPage() {
     <div className="w-full h-screen flex flex-col bg-darkbg text-white font-sans overflow-hidden relative selection:bg-neon selection:text-black">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[300px] bg-neon/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <header className="shrink-0 pt-14 px-5 pb-4 flex justify-between items-center z-20 bg-darkbg/85 backdrop-blur-[12px]" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
+      <header className="shrink-0 pt-14 px-5 pb-6 flex justify-between items-center z-20 bg-darkbg/85 backdrop-blur-[12px] border-b border-white/5" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
         <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-surface border border-surfaceLight flex items-center justify-center text-zinc-300 hover:text-white transition-colors">
           <ArrowLeft size={20} />
         </button>
@@ -218,7 +244,7 @@ export default function SwapPage() {
 
         {error && <p className="text-red-400 text-xs text-center mb-3">{error}</p>}
 
-        <NeonButton onClick={quote ? handleSwap : fetchQuote} disabled={!address || sending || loadingQuote}>
+        <NeonButton onClick={quote ? handleSwap : fetchQuote} disabled={!evm.address || sending || loadingQuote}>
           {loadingQuote ? <><Loader2 size={18} className="animate-spin" /> Getting Quote...</>
             : sending ? <><Loader2 size={18} className="animate-spin" /> Swapping...</>
             : quote ? 'Execute Swap'

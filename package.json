@@ -10,11 +10,11 @@
     "lint": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@solana/wallet-adapter-base": "^0.9.27",
-    "@solana/wallet-adapter-react": "^0.15.39",
-    "@solana/wallet-adapter-wallets": "^0.19.38",
+    "@heroicons/react": "^2.2.0",
+    "@privy-io/react-auth": "3.30.0",
+    "@solana/kit": "^6.5.0",
+    "@solana-program/memo": "^0.11.1",
     "@solana/web3.js": "^1.91.0",
-    "@tanstack/react-query": "^5.101.0",
     "@ton/crypto": "^3.3.0",
     "@ton/ton": "^16.3.0",
     "@tonconnect/ui-react": "^3.0.0",
@@ -23,7 +23,6 @@
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.17.0",
     "viem": "^2.52.2",
-    "wagmi": "^3.6.16",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

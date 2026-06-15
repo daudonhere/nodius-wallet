@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Search, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ArrowDownToLine, CheckCircle2, Clock, XCircle, Loader2, RefreshCw } from 'lucide-react'
-import { useAccount } from 'wagmi'
-import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
+import { Search, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ArrowDownToLine, CheckCircle2, Clock, XCircle, Loader2, RefreshCw, X, Wallet, FileSearch } from 'lucide-react'
 import { useTonAddress } from '@tonconnect/ui-react'
+import { useWalletConnection } from '../hooks/useWalletConnection'
 import { fetchEVMHistory, fetchSolanaHistory } from '../services/explorer'
 import type { Transaction } from '../types/transaction'
 
@@ -32,24 +31,25 @@ export default function HistoryPage() {
   const [activeFilter, setActiveFilter] = useState<TxFilter>('all')
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const { address: evmAddress, chainId } = useAccount()
-  const solanaWallet = useSolanaWallet()
+  const { evm, solana } = useWalletConnection()
   const tonAddress = useTonAddress()
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
     const promises: Promise<Transaction[]>[] = []
 
-    if (evmAddress) {
-      const chains = chainId ? [chainId] : [1, 137, 42161, 8453]
+    if (evm.address && evm.chainId) {
+      const chains = evm.chainId ? [evm.chainId] : [1, 137, 42161, 8453]
       for (const c of chains) {
-        promises.push(fetchEVMHistory(evmAddress, c))
+        promises.push(fetchEVMHistory(evm.address, c))
       }
     }
 
-    if (solanaWallet.publicKey) {
-      promises.push(fetchSolanaHistory(solanaWallet.publicKey.toBase58()))
+    if (solana.address) {
+      promises.push(fetchSolanaHistory(solana.address))
     }
 
     if (promises.length === 0) {
@@ -64,7 +64,7 @@ export default function HistoryPage() {
     )
     setTransactions(all)
     setLoading(false)
-  }, [evmAddress, chainId, solanaWallet.publicKey, tonAddress])
+  }, [evm.address, evm.chainId, solana.address, tonAddress])
 
   useEffect(() => {
     fetchAll()
@@ -72,36 +72,43 @@ export default function HistoryPage() {
     return () => clearInterval(interval)
   }, [fetchAll])
 
-  const filtered = activeFilter === 'all'
+  const filtered = (activeFilter === 'all'
     ? transactions
     : activeFilter === 'sent'
       ? transactions.filter((tx) => tx.type === 'send')
       : activeFilter === 'received'
         ? transactions.filter((tx) => tx.type === 'receive')
         : transactions.filter((tx) => tx.type === 'swap' || tx.type === 'bridge')
+  ).filter(tx =>
+    !searchQuery ||
+    tx.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    tx.token.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    tx.amount.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (tx.usdValue && tx.usdValue.toLowerCase().includes(searchQuery.toLowerCase()))
+  )
 
   const totalIn = transactions.filter((tx) => tx.type === 'receive').length
   const totalOut = transactions.filter((tx) => tx.type === 'send').length
 
   return (
     <>
-      <header className="sticky top-0 pt-14 px-5 pb-4 flex justify-between items-center z-20 bg-darkbg/85 backdrop-blur-[12px]" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
+      <header className="sticky top-0 pt-14 px-5 pb-6 flex justify-between items-center z-20 bg-darkbg/85 backdrop-blur-[12px] border-b border-white/5" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
         <h1 className="text-[22px] font-bold tracking-tight">History</h1>
         <div className="flex gap-2">
           <button
             onClick={fetchAll}
             disabled={loading}
-            className="w-10 h-10 rounded-full bg-surface border border-surfaceLight flex items-center justify-center text-zinc-300 hover:text-neon hover:border-neon/50 transition-colors shadow-sm disabled:opacity-50"
+            className="w-10 h-10 rounded-full bg-surface border border-surfaceLight flex items-center justify-center text-zinc-300 hover:text-neon hover:border-neon/50 transition-colors disabled:opacity-50"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
           </button>
-          <button className="w-10 h-10 rounded-full bg-surface border border-surfaceLight flex items-center justify-center text-zinc-300 hover:text-neon hover:border-neon/50 transition-colors shadow-sm">
+          <button onClick={() => setShowSearch(!showSearch)} className="w-10 h-10 rounded-full bg-surface border border-surfaceLight flex items-center justify-center text-zinc-300 hover:text-neon hover:border-neon/50 transition-colors">
             <Search size={18} />
           </button>
         </div>
       </header>
 
-      <div className="px-5 mb-6">
+      <div className="px-5 mt-4 mb-6">
         <div className="bg-surface/50 border border-surfaceLight rounded-[20px] p-4">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] text-zinc-500 font-medium tracking-wide uppercase">Total Transactions</span>
@@ -145,6 +152,26 @@ export default function HistoryPage() {
         </div>
       </div>
 
+      {showSearch && (
+        <div className="px-5 mb-4">
+          <div className="flex items-center gap-2 bg-surface/50 border border-surfaceLight rounded-xl px-3.5 py-2.5">
+            <Search size={16} className="text-zinc-500 shrink-0" />
+            <input
+              autoFocus
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by token, amount..."
+              className="flex-1 bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600 font-medium"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="text-zinc-500 hover:text-white transition-colors">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="px-5 flex flex-col gap-2.5 pb-4">
         {loading && (
           <div className="flex items-center justify-center py-16 text-zinc-500">
@@ -153,8 +180,13 @@ export default function HistoryPage() {
         )}
 
         {!loading && filtered.length === 0 && (
-          <div className="flex items-center justify-center py-16 text-zinc-500">
-            <p className="text-sm">{transactions.length === 0 ? 'No wallet connected' : 'No transactions found'}</p>
+          <div className="flex flex-col items-center justify-center py-16 text-zinc-500 gap-3">
+            {evm.address || solana.address || tonAddress ? (
+              <FileSearch size={32} className="text-zinc-600" />
+            ) : (
+              <Wallet size={32} className="text-zinc-600" />
+            )}
+            <p className="text-sm">{evm.address || solana.address || tonAddress ? 'No history found' : 'No wallet connected'}</p>
           </div>
         )}
 

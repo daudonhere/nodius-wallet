@@ -1,23 +1,53 @@
-import { useWallet as useSolana } from '@solana/wallet-adapter-react'
 import { useTonAddress, useTonConnectModal } from '@tonconnect/ui-react'
-import { useAccount, useConnect, useDisconnect } from 'wagmi'
+import { usePrivy, useWallets as useEvmWallets } from '@privy-io/react-auth'
+import { useWallets as useSolanaWallets } from '@privy-io/react-auth/solana'
 import { useWalletStore } from '../stores/walletStore'
 
 export function useWalletConnection() {
   const store = useWalletStore()
 
-  const { address: evmAddress, isConnected: evmConnected, chainId } = useAccount()
-  const { connect: evmConnect, connectors } = useConnect()
-  const { disconnect: evmDisconnect } = useDisconnect()
-
-  const { connected: solanaConnected, publicKey: solanaKey, disconnect: solanaDisconnect, select: solanaSelect, wallets: solanaWallets } = useSolana()
+  const { ready, authenticated, user, login, logout, connectWallet } = usePrivy()
+  const { wallets: evmWallets } = useEvmWallets()
+  const { wallets: solanaWallets } = useSolanaWallets()
   const tonModal = useTonConnectModal()
   const tonAddress = useTonAddress()
 
+  const evmWallet = evmWallets[0]
+  const solanaWallet = solanaWallets[0]
+
+  const parseChainId = (caip2?: string): number | undefined => {
+    if (!caip2) return undefined
+    const parts = caip2.split(':')
+    return parts[1] ? Number(parts[1]) : undefined
+  }
+
   return {
-    evm: { address: evmAddress, connected: evmConnected, chainId, connect: evmConnect, connectors, disconnect: evmDisconnect },
-    solana: { connected: solanaConnected, publicKey: solanaKey, disconnect: solanaDisconnect, select: solanaSelect, wallets: solanaWallets },
-    ton: { address: tonAddress, connected: !!tonAddress, connect: () => tonModal.open(), disconnect: () => tonModal.close() },
+    ready,
+    authenticated,
+    user,
+    login,
+    logout,
+    connectWallet,
+    evm: {
+      address: evmWallet?.address,
+      connected: !!evmWallet,
+      chainId: parseChainId(evmWallet?.chainId),
+      wallet: evmWallet,
+      disconnect: logout,
+    },
+    solana: {
+      address: solanaWallet?.address,
+      connected: !!solanaWallet,
+      wallet: solanaWallet,
+      disconnect: logout,
+      signAndSend: solanaWallet?.signAndSendTransaction.bind(solanaWallet),
+    },
+    ton: {
+      address: tonAddress,
+      connected: !!tonAddress,
+      connect: () => tonModal.open(),
+      disconnect: () => tonModal.close(),
+    },
     store,
   }
 }

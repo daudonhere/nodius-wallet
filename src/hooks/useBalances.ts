@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { formatUnits } from 'viem'
-import { useAccount, useBalance } from 'wagmi'
-import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
+import { createPublicClient, http } from 'viem'
+import { mainnet } from 'viem/chains'
 import { useTonAddress } from '@tonconnect/ui-react'
-import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js'
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js'
+import { useWalletConnection } from './useWalletConnection'
 import { fetchPrices, TRENDING_COINS } from '../services/price'
 import { notifyPriceAlert } from '../services/notifications'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -14,6 +15,11 @@ const solanaConnection = new Connection(
   import.meta.env.VITE_SOLANA_RPC || 'https://api.mainnet-beta.solana.com'
 )
 
+const publicClient = createPublicClient({
+  chain: mainnet,
+  transport: http(),
+})
+
 interface BalanceEntry {
   symbol: string
   balance: string
@@ -22,16 +28,30 @@ interface BalanceEntry {
 }
 
 export function useBalances() {
-  const { address: evmAddress, isConnected } = useAccount()
-  const { data: ethData } = useBalance({ address: evmAddress })
-  const ethBalance = ethData ? { symbol: ethData.symbol, formatted: formatUnits(ethData.value, ethData.decimals) } : null
-  const solanaWallet = useSolanaWallet()
+  const { evm, solana } = useWalletConnection()
   const tonAddress = useTonAddress()
 
+  const [ethBalance, setEthBalance] = useState<string>('')
   const [solBalance, setSolBalance] = useState<string>('')
   const [prices, setPrices] = useState<Record<string, { price: number; change24h: number }>>({})
 
   const SYMBOLS = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'AVAX', 'LINK', 'MATIC', 'ARB', 'DOGE', 'TON', 'UNI']
+
+  useEffect(() => {
+    if (!evm.address) { setEthBalance(''); return }
+    publicClient.getBalance({ address: evm.address as `0x${string}` }).then((b) =>
+      setEthBalance(formatUnits(b, 18))
+    )
+  }, [evm.address])
+
+  useEffect(() => {
+    if (!solana.address) { setSolBalance(''); return }
+    try {
+      solanaConnection.getBalance(new PublicKey(solana.address)).then((b) =>
+        setSolBalance((b / LAMPORTS_PER_SOL).toFixed(4))
+      )
+    } catch {}
+  }, [solana.address])
 
   useEffect(() => {
     const fetchAndCheck = async () => {
@@ -62,15 +82,8 @@ export function useBalances() {
     return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    if (!solanaWallet.publicKey) { setSolBalance(''); return }
-    solanaConnection.getBalance(solanaWallet.publicKey).then((b) =>
-      setSolBalance((b / LAMPORTS_PER_SOL).toFixed(4))
-    )
-  }, [solanaWallet.publicKey])
-
   const tokens: BalanceEntry[] = []
-  if (ethBalance) tokens.push({ symbol: 'ETH', balance: ethBalance.formatted, usdValue: ethBalance.formatted, icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg' })
+  if (ethBalance) tokens.push({ symbol: 'ETH', balance: ethBalance, usdValue: ethBalance, icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg' })
   if (solBalance) tokens.push({ symbol: 'SOL', balance: solBalance, usdValue: solBalance, icon: 'https://cryptologos.cc/logos/solana-sol-logo.svg' })
   if (tonAddress) tokens.push({ symbol: 'TON', balance: '—', usdValue: '', icon: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg' })
 
@@ -84,5 +97,5 @@ export function useBalances() {
     }
   })
 
-  return { tokens, trending, prices, isConnected }
+  return { tokens, trending, prices, isConnected: evm.connected || solana.connected || !!tonAddress }
 }

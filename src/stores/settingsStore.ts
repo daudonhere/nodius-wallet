@@ -2,7 +2,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { AppSettings, GasSpeed, LocalCurrency } from '../types/settings'
 
+type MainChain = 'evm' | 'solana' | 'ton'
+
 interface SettingsState extends AppSettings {
+  mainChain: MainChain
+  setMainChain: (v: MainChain) => void
   setDarkMode: (v: boolean) => void
   setLocalCurrency: (v: LocalCurrency) => void
   setDefaultNetwork: (v: string) => void
@@ -18,10 +22,12 @@ export const useSettingsStore = create<SettingsState>()(
       darkMode: true,
       localCurrency: 'usd',
       defaultNetwork: 'Ethereum',
+      mainChain: 'evm' as MainChain,
       gasFeeRouting: true,
       gasSpeed: 'normal',
       biometricUnlock: false,
       pushNotifications: false,
+      setMainChain: (v) => set({ mainChain: v }),
       setDarkMode: (v) => set({ darkMode: v }),
       setLocalCurrency: (v) => set({ localCurrency: v }),
       setDefaultNetwork: (v) => set({ defaultNetwork: v }),

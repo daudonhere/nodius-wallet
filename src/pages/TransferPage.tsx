@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { ArrowLeft, QrCode, BookUser, Zap, Settings2, CheckCircle2, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useAccount } from 'wagmi'
-import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useTonAddress } from '@tonconnect/ui-react'
+import { useWalletConnection } from '../hooks/useWalletConnection'
 import BottomNavigation from '../components/BottomNavigation'
 import NeonButton from '../components/NeonButton'
 import TokenSelectButton from '../components/TokenSelectButton'
@@ -25,19 +24,22 @@ export default function TransferPage() {
   const navigate = useNavigate()
   const [address, setAddress] = useState('')
   const [amount, setAmount] = useState('')
-  const [network, setNetwork] = useState<Network>('Ethereum')
   const [showAddressBook, setShowAddressBook] = useState(false)
 
-  const { address: evmAddress } = useAccount()
-  const solanaWallet = useSolanaWallet()
+  const { evm, solana } = useWalletConnection()
   const tonAddress = useTonAddress()
   const { tokens } = useBalances()
   const transfer = useTransfer()
+  const mainChain = useSettingsStore((s) => s.mainChain)
   const gasFeeRouting = useSettingsStore((s) => s.gasFeeRouting)
   const setGasFeeRouting = useSettingsStore((s) => s.setGasFeeRouting)
 
-  const isConnected = network === 'Ethereum' ? !!evmAddress
-    : network === 'Solana' ? !!solanaWallet.publicKey
+  const networkMap: Record<string, Network> = { evm: 'Ethereum', solana: 'Solana', ton: 'TON' }
+
+  const [network, setNetwork] = useState<Network>(networkMap[mainChain] ?? 'Ethereum')
+
+  const isConnected = network === 'Ethereum' ? evm.connected
+    : network === 'Solana' ? solana.connected
     : !!tonAddress
 
   const handleTransfer = async () => {
@@ -55,7 +57,7 @@ export default function TransferPage() {
     <div className="w-full h-screen flex flex-col bg-darkbg text-white font-sans overflow-hidden relative selection:bg-neon selection:text-black">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[300px] bg-neon/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <header className="shrink-0 pt-14 px-5 pb-4 flex justify-between items-center z-20 bg-darkbg/85 backdrop-blur-[12px]" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
+      <header className="shrink-0 pt-14 px-5 pb-6 flex justify-between items-center z-20 bg-darkbg/85 backdrop-blur-[12px] border-b border-white/5" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
         <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-surface border border-surfaceLight flex items-center justify-center text-zinc-300 hover:text-white transition-colors">
           <ArrowLeft size={20} />
         </button>

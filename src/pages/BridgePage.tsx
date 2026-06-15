@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, ChevronDown, ArrowDownUp, Info, Clock, ChevronRight, Globe, Loader2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useAccount, useSendTransaction } from 'wagmi'
-import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
+import { useSendTransaction } from '@privy-io/react-auth'
 import { useTonAddress } from '@tonconnect/ui-react'
+import { useWalletConnection } from '../hooks/useWalletConnection'
 import { getBridgeQuote, type BridgeQuote } from '../services/bridge'
 import BottomNavigation from '../components/BottomNavigation'
 
@@ -74,10 +74,9 @@ function ChainModal({ open, chains, selected, onSelect, onClose }: {
 
 export default function BridgePage() {
   const navigate = useNavigate()
-  const { address: evmAddress } = useAccount()
-  const solanaWallet = useSolanaWallet()
+  const { evm, solana } = useWalletConnection()
   const tonAddress = useTonAddress()
-  const { sendTransactionAsync } = useSendTransaction()
+  const { sendTransaction } = useSendTransaction()
 
   const [fromChain, setFromChain] = useState<ChainOption>(chains[0])
   const [toChain, setToChain] = useState<ChainOption>(chains[1])
@@ -89,7 +88,7 @@ export default function BridgePage() {
   const [showFromModal, setShowFromModal] = useState(false)
   const [showToModal, setShowToModal] = useState(false)
 
-  const fromAddress = evmAddress || solanaWallet.publicKey?.toBase58() || tonAddress || ''
+  const fromAddress = evm.address || solana.address || tonAddress || ''
 
   useEffect(() => {
     if (!amount || parseFloat(amount) <= 0 || !fromAddress) {
@@ -123,10 +122,10 @@ export default function BridgePage() {
   }
 
   const handleReview = async () => {
-    if (!quote?.transactionRequest || !evmAddress) return
+    if (!quote?.transactionRequest || !evm.address) return
     setSending(true)
     try {
-      await sendTransactionAsync({
+      await sendTransaction({
         to: quote.transactionRequest.to as `0x${string}`,
         data: quote.transactionRequest.data as `0x${string}`,
         value: BigInt(quote.transactionRequest.value || '0'),
@@ -144,7 +143,7 @@ export default function BridgePage() {
     <div className="w-full h-screen flex flex-col bg-darkbg text-white font-sans overflow-hidden relative selection:bg-neon selection:text-black">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[300px] bg-neon/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <header className="shrink-0 pt-14 px-5 pb-4 flex justify-between items-center z-20 bg-darkbg/85 backdrop-blur-[12px]" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
+      <header className="shrink-0 pt-14 px-5 pb-6 flex justify-between items-center z-20 bg-darkbg/85 backdrop-blur-[12px] border-b border-white/5" style={{ WebkitBackdropFilter: 'blur(12px)' }}>
         <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-surface border border-surfaceLight flex items-center justify-center text-zinc-300 hover:text-white transition-colors">
           <ArrowLeft size={20} />
         </button>
@@ -245,12 +244,12 @@ export default function BridgePage() {
 
         <button
           onClick={handleReview}
-          disabled={!quote || sending || !evmAddress}
+          disabled={!quote || sending || !evm.address}
           className="w-full bg-neon text-black font-extrabold text-[15px] py-4 rounded-[20px] shadow-[0_0_24px_rgba(204,255,0,0.25)] hover:shadow-[0_0_32px_rgba(204,255,0,0.4)] hover:bg-[#D4FF33] transition-all flex items-center justify-center gap-2 tracking-wide disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {sending ? (
             <><Loader2 size={18} className="animate-spin" /> Sending...</>
-          ) : !evmAddress ? (
+          ) : !evm.address ? (
             'Connect EVM Wallet'
           ) : quote ? (
             'Review Bridge'
