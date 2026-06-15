@@ -138,20 +138,50 @@ export default function WalletPage() {
           </div>
         )}
 
-        <button
-          onClick={() => {
-            const mmConnector = connectors.find(c => c.id === 'metaMask')
-            if (!evmConnected && mmConnector) evmConnect({ connector: mmConnector })
-            if (!solanaWallet.connected && solanaWallet.wallets.length > 0) solanaWallet.select(solanaWallet.wallets[0]?.adapter.name ?? '')
-            if (!tonAddress) tonModal.open()
-          }}
-          className="w-full bg-transparent hover:bg-surface/40 border-2 border-dashed border-surfaceLight hover:border-neon/40 rounded-[24px] p-5 flex flex-col items-center justify-center gap-3 transition-all mt-2 group"
-        >
-          <div className="w-10 h-10 rounded-full bg-surfaceLight group-hover:bg-neon/10 flex items-center justify-center transition-colors">
-            <Plus size={20} className="text-zinc-400 group-hover:text-neon transition-colors" />
-          </div>
-          <span className="text-[13px] font-semibold text-zinc-400 group-hover:text-white transition-colors">Connect New Wallet</span>
-        </button>
+        <div className="flex flex-col gap-3">
+          {!evmConnected && (
+            <button
+              onClick={() => {
+                console.log('[WalletPage] connectors:', connectors.map(c => ({ id: c.id, name: c.name })))
+                try {
+                  const mmConnector = connectors.find(c => c.id === 'metaMask')
+                  if (mmConnector) {
+                    console.log('[WalletPage] connecting metaMask...')
+                    evmConnect({ connector: mmConnector })
+                  } else {
+                    console.warn('[WalletPage] metaMask connector not found, trying injected')
+                    const injConnector = connectors.find(c => c.id === 'injected')
+                    if (injConnector) evmConnect({ connector: injConnector })
+                  }
+                } catch (err) {
+                  console.error('[WalletPage] EVM connect error:', err)
+                }
+              }}
+              className="w-full bg-transparent hover:bg-surface/40 border-2 border-dashed border-surfaceLight hover:border-neon/40 rounded-[24px] p-5 flex flex-col items-center justify-center gap-3 transition-all group"
+            >
+              <div className="w-10 h-10 rounded-full bg-surfaceLight group-hover:bg-neon/10 flex items-center justify-center transition-colors">
+                <Plus size={20} className="text-zinc-400 group-hover:text-neon transition-colors" />
+              </div>
+              <span className="text-[13px] font-semibold text-zinc-400 group-hover:text-white transition-colors">Connect EVM Wallet</span>
+            </button>
+          )}
+          {!solanaWallet.connected && solanaWallet.wallets.length > 0 && (
+            <button
+              onClick={() => solanaWallet.select(solanaWallet.wallets[0]?.adapter.name ?? '')}
+              className="w-full bg-transparent hover:bg-surface/40 border-2 border-dashed border-surfaceLight hover:border-neon/40 rounded-[24px] p-5 flex flex-col items-center justify-center gap-3 transition-all group"
+            >
+              <span className="text-[13px] font-semibold text-zinc-400 group-hover:text-white transition-colors">Connect Solana Wallet</span>
+            </button>
+          )}
+          {!tonAddress && (
+            <button
+              onClick={() => tonModal.open()}
+              className="w-full bg-transparent hover:bg-surface/40 border-2 border-dashed border-surfaceLight hover:border-neon/40 rounded-[24px] p-5 flex flex-col items-center justify-center gap-3 transition-all group"
+            >
+              <span className="text-[13px] font-semibold text-zinc-400 group-hover:text-white transition-colors">Connect TON Wallet</span>
+            </button>
+          )}
+        </div>
       </div>
     </>
   )
