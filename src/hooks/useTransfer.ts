@@ -45,11 +45,13 @@ export function useTransfer() {
         const eth = (window as any).ethereum
         if (!eth) { setState('error'); setError('MetaMask not detected'); return }
 
+        const toHex = (v: bigint | number) => '0x' + BigInt(v).toString(16)
+
         const typedData = {
           domain: {
             name: 'NodiusRelay',
             version: '1',
-            chainId,
+            chainId: toHex(chainId),
             verifyingContract: contractAddress,
           },
           types: {
@@ -70,10 +72,10 @@ export function useTransfer() {
           primaryType: 'Execute',
           message: {
             target: to,
-            value: value.toString(),
+            value: toHex(value),
             data: '0x',
-            nonce: nonce.toString(),
-            deadline: deadline.toString(),
+            nonce: toHex(nonce),
+            deadline: toHex(deadline),
           },
         }
 
