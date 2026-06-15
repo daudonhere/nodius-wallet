@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAccount, useSendTransaction } from 'wagmi'
+import { useAccount, useSendTransaction, useSignTypedData } from 'wagmi'
 import { useWallet as useSolanaWallet } from '@solana/wallet-adapter-react'
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
 import { Connection, Transaction as SolanaTx } from '@solana/web3.js'
@@ -18,6 +18,7 @@ export function useTransfer() {
 
   const { address: evmAddress, chainId } = useAccount()
   const { sendTransactionAsync } = useSendTransaction()
+  const { signTypedDataAsync } = useSignTypedData()
   const solanaWallet = useSolanaWallet()
   const tonAddress = useTonAddress()
   const [tonUI] = useTonConnectUI()
@@ -42,25 +43,14 @@ export function useTransfer() {
         if (!contractAddress) { setState('error'); setError('Relay contract not available on this chain'); return }
         const deadline = Math.floor(Date.now() / 1000) + 3600
 
-        const eth = (window as any).ethereum
-        if (!eth) { setState('error'); setError('MetaMask not detected'); return }
-
-        const toHex = (v: bigint | number) => '0x' + BigInt(v).toString(16)
-
-        const typedData = {
+        const signature = await signTypedDataAsync({
           domain: {
             name: 'NodiusRelay',
             version: '1',
-            chainId: toHex(chainId),
-            verifyingContract: contractAddress,
+            chainId,
+            verifyingContract: contractAddress as `0x${string}`,
           },
           types: {
-            EIP712Domain: [
-              { name: 'name', type: 'string' },
-              { name: 'version', type: 'string' },
-              { name: 'chainId', type: 'uint256' },
-              { name: 'verifyingContract', type: 'address' },
-            ],
             Execute: [
               { name: 'target', type: 'address' },
               { name: 'value', type: 'uint256' },
@@ -71,17 +61,12 @@ export function useTransfer() {
           },
           primaryType: 'Execute',
           message: {
-            target: to,
-            value: toHex(value),
-            data: '0x',
-            nonce: toHex(nonce),
-            deadline: toHex(deadline),
+            target: to as `0x${string}`,
+            value,
+            data: '0x' as `0x${string}`,
+            nonce: BigInt(nonce),
+            deadline: BigInt(deadline),
           },
-        }
-
-        const signature = await eth.request({
-          method: 'eth_signTypedData_v4',
-          params: [evmAddress, JSON.stringify(typedData)],
         })
 
         setState('broadcasting')
