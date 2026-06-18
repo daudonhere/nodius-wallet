@@ -40,10 +40,9 @@ export default function HomePage() {
     return sum + (price && t.balance !== '—' ? parseFloat(t.balance) * price : 0)
   }, 0)
 
-  const balanceLine = tokens
-    .filter(t => t.balance && t.balance !== '—' && parseFloat(t.balance) > 0)
-    .map(t => `${parseFloat(t.balance).toFixed(4)} ${t.symbol}`)
-    .join(' · ') || '—'
+  const balanceLine = tokens.filter(t => t.balance && t.balance !== '—' && parseFloat(t.balance) > 0).length
+    ? `${tokens.filter(t => t.balance && t.balance !== '—' && parseFloat(t.balance) > 0).length} assets across chains`
+    : '—'
 
   const anyConnected = (authenticated && evm.connected && evm.address) || (authenticated && solana.connected && solana.address) || !!tonAddress
 
@@ -69,22 +68,25 @@ export default function HomePage() {
     }] : []),
   ]
 
-  const chainMeta: Record<string, { name: string; icon: string }> = {
-    ETH: { name: 'Ethereum', icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg' },
-    SOL: { name: 'Solana', icon: 'https://cryptologos.cc/logos/solana-sol-logo.svg' },
-    TON: { name: 'TON', icon: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg' },
+  const chainIcons: Record<string, string> = {
+    Ethereum: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
+    Base: 'https://cryptologos.cc/logos/base-base-logo.svg',
+    Polygon: 'https://cryptologos.cc/logos/polygon-matic-logo.svg',
+    Arbitrum: 'https://cryptologos.cc/logos/arbitrum-arb-logo.svg',
+    Solana: 'https://cryptologos.cc/logos/solana-sol-logo.svg',
+    TON: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg',
   }
 
-  const ownedTokens = tokens.filter(t => t.balance && t.balance !== '—' && parseFloat(t.balance) > 0)
+  const ownedTokens = tokens.filter(t => t.balance && t.balance !== '—' && parseFloat(t.balance) > 0 && prices[t.symbol]?.price != null)
 
   interface ChainGroup { name: string; icon: string; tokens: { symbol: string; balance: string; icon?: string; usdValue?: string; change24h?: number }[] }
 
   const chainGroups = ownedTokens.reduce<Record<string, ChainGroup>>((acc, t) => {
-    const meta = chainMeta[t.symbol]
-    if (!meta) return acc
-    if (!acc[meta.name]) acc[meta.name] = { name: meta.name, icon: meta.icon, tokens: [] }
+    const chainName = t.chainName || 'Other'
+    const icon = chainIcons[chainName] || t.icon || walletIcons.EVM
+    if (!acc[chainName]) acc[chainName] = { name: chainName, icon, tokens: [] }
     const priceInfo = prices[t.symbol]
-    acc[meta.name].tokens.push({
+    acc[chainName].tokens.push({
       symbol: t.symbol,
       balance: t.balance,
       icon: t.icon,
