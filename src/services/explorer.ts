@@ -121,6 +121,45 @@ interface SolscanTx {
   }[]
 }
 
+export async function fetchTONHistory(address: string): Promise<Transaction[]> {
+  try {
+    const res = await fetch(`https://tonapi.io/v2/blockchain/accounts/${encodeURIComponent(address)}/transactions?limit=50`)
+    if (!res.ok) return []
+    const data = await res.json()
+    const txs: Transaction[] = []
+
+    for (const tx of data.transactions || []) {
+      const hash = tx.hash || tx.transaction_id?.hash || `${tx.lt || Date.now()}`
+      const timestamp = Number(tx.utime || tx.now || 0)
+      const outMessages = tx.out_msgs || []
+      const inMessage = tx.in_msg
+      const outgoing = outMessages.find((m: any) => m.destination?.address || m.destination)
+      const incoming = inMessage?.source?.address || inMessage?.source
+      const amount = outgoing?.value ?? inMessage?.value ?? '0'
+      const isSend = !!outgoing
+      const other = isSend ? (outgoing.destination?.address || outgoing.destination || '') : incoming || ''
+      const tonAmount = (Number(amount) / 1e9).toFixed(4)
+
+      txs.push({
+        id: `ton-${hash}`,
+        type: isSend ? 'send' : 'receive',
+        token: 'TON',
+        tokenLogo: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg',
+        label: other ? `${isSend ? 'To' : 'From'} ${other.slice(0, 6)}...${other.slice(-4)}` : 'TON Transaction',
+        amount: isSend ? `-${tonAmount} TON` : `+${tonAmount} TON`,
+        usdValue: '',
+        date: timestamp ? new Date(timestamp * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        status: tx.success === false ? 'failed' : 'completed',
+        txHash: hash,
+      })
+    }
+
+    return txs
+  } catch {
+    return []
+  }
+}
+
 export async function fetchSolanaHistory(address: string): Promise<Transaction[]> {
   if (!SOLSCAN_KEY) return []
 

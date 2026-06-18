@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ArrowLeft, SlidersHorizontal, ChevronDown, ArrowDownUp, Info, Zap, ChevronRight, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, SlidersHorizontal, ChevronDown, ArrowDownUp, Info, Zap, ChevronRight, Loader2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useSendTransaction, useSignTypedData } from '@privy-io/react-auth'
 import { useWalletConnection } from '../hooks/useWalletConnection'
@@ -36,6 +36,8 @@ export default function SwapPage() {
   const [sending, setSending] = useState(false)
   const [txHash, setTxHash] = useState('')
   const [error, setError] = useState('')
+  const [tokenPicker, setTokenPicker] = useState<'from' | 'to' | null>(null)
+  const [slippage, setSlippage] = useState('0.5%')
 
   const fromPrice = prices[fromToken.symbol]?.price ?? 0
   const toPrice = prices[toToken.symbol]?.price ?? 0
@@ -58,6 +60,15 @@ export default function SwapPage() {
     if (!q) setError('Could not fetch quote')
     setLoadingQuote(false)
   }
+
+  useEffect(() => {
+    setQuote(null)
+    if (!evm.address || !fromAmount || parseFloat(fromAmount) <= 0 || fromToken.address === toToken.address) return
+    const timer = setTimeout(() => {
+      fetchQuote()
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [evm.address, fromAmount, fromToken.address, toToken.address, slippage])
 
   const handleSwap = async () => {
     if (!evm.address || !quote?.tx) return
@@ -160,7 +171,7 @@ export default function SwapPage() {
                 onChange={(e) => { setFromAmount(e.target.value); setQuote(null) }}
                 className="bg-transparent border-none outline-none font-mono text-[40px] font-bold text-white w-[55%] placeholder-zinc-800 tracking-tight"
               />
-              <button className="flex items-center gap-2 bg-surfaceLight hover:bg-surfaceLight/80 transition-colors py-2.5 px-3.5 rounded-full border border-white/5 shadow-sm">
+              <button onClick={() => setTokenPicker('from')} className="flex items-center gap-2 bg-surfaceLight hover:bg-surfaceLight/80 transition-colors py-2.5 px-3.5 rounded-full border border-white/5 shadow-sm">
                 <img src={fromToken.icon} alt={fromToken.symbol} className="w-[22px] h-[22px]" />
                 <span className="font-bold text-[15px]">{fromToken.symbol}</span>
                 <ChevronDown size={14} className="text-zinc-400 ml-0.5" />
@@ -182,7 +193,7 @@ export default function SwapPage() {
             </div>
             <div className="flex justify-between items-center">
               <input type="number" placeholder="0" value={toAmount} readOnly className="bg-transparent border-none outline-none font-mono text-[40px] font-bold text-white w-[55%] placeholder-zinc-800 tracking-tight" />
-              <button className="flex items-center gap-2 bg-[#2775CA]/10 hover:bg-[#2775CA]/20 transition-colors py-2.5 px-3.5 rounded-full border border-[#2775CA]/20 shadow-sm">
+              <button onClick={() => setTokenPicker('to')} className="flex items-center gap-2 bg-[#2775CA]/10 hover:bg-[#2775CA]/20 transition-colors py-2.5 px-3.5 rounded-full border border-[#2775CA]/20 shadow-sm">
                 <img src={toToken.icon} alt={toToken.symbol} className="w-[22px] h-[22px]" />
                 <span className="font-bold text-[15px]">{toToken.symbol}</span>
                 <ChevronDown size={14} className="text-zinc-400 ml-0.5" />
@@ -195,11 +206,11 @@ export default function SwapPage() {
         <div className="mt-6 mb-5 px-1">
           <div className="flex justify-between items-center mb-3 text-[13px]">
             <span className="text-zinc-400 font-medium flex items-center gap-1.5">Slippage Tolerance <Info size={14} className="text-zinc-500" /></span>
-            <span className="text-white font-bold">0.5%</span>
+            <span className="text-white font-bold">{slippage}</span>
           </div>
           <div className="flex gap-2.5">
             {['Auto', '0.1%', '0.5%', '1.0%'].map((val) => (
-              <button key={val} className={`flex-1 border font-semibold py-2.5 rounded-[14px] text-sm transition-colors ${val === '0.5%' ? 'bg-neon/10 border-neon/30 text-neon font-bold shadow-[0_0_12px_rgba(204,255,0,0.15)]' : 'bg-surface border-surfaceLight text-zinc-400 hover:text-white hover:bg-surfaceLight'}`}>
+              <button key={val} onClick={() => setSlippage(val)} className={`flex-1 border font-semibold py-2.5 rounded-[14px] text-sm transition-colors ${val === slippage ? 'bg-neon/10 border-neon/30 text-neon font-bold shadow-[0_0_12px_rgba(204,255,0,0.15)]' : 'bg-surface border-surfaceLight text-zinc-400 hover:text-white hover:bg-surfaceLight'}`}>
                 {val}
               </button>
             ))}
@@ -251,6 +262,47 @@ export default function SwapPage() {
             : 'Get Quote'}
         </NeonButton>
       </main>
+
+      {tokenPicker && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setTokenPicker(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md bg-surface border border-surfaceLight rounded-t-[28px] p-5 pb-10" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-base font-bold">Select Token</h3>
+              <button onClick={() => setTokenPicker(null)} className="w-8 h-8 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {TOKENS.map((token) => {
+                const selected = tokenPicker === 'from' ? token.address === fromToken.address : token.address === toToken.address
+                const disabled = tokenPicker === 'from' ? token.address === toToken.address : token.address === fromToken.address
+                return (
+                  <button
+                    key={token.address}
+                    disabled={disabled}
+                    onClick={() => {
+                      if (tokenPicker === 'from') setFromToken(token)
+                      else setToToken(token)
+                      setQuote(null)
+                      setTokenPicker(null)
+                    }}
+                    className={`flex items-center gap-3.5 p-3.5 rounded-[16px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${selected ? 'bg-surfaceLight border border-white/5' : 'hover:bg-surfaceLight/50'}`}
+                  >
+                    <img src={token.icon} alt={token.symbol} className="w-9 h-9 rounded-full" />
+                    <div className="text-left">
+                      <p className="text-sm font-bold">{token.symbol}</p>
+                      <p className="text-[11px] text-zinc-500">{token.name}</p>
+                    </div>
+                    {selected && <div className="ml-auto w-2.5 h-2.5 rounded-full bg-neon" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       <BottomNavigation />
     </div>
   )

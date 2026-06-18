@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Search, Moon, Coins, Globe, Zap, Fuel, Fingerprint, BellRing, LifeBuoy, LogOut, ChevronRight, Camera, Rocket, BookUser, TrendingUp, Plus, X, Check } from 'lucide-react'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -7,6 +7,7 @@ import { useAlertStore } from '../stores/alertStore'
 import { requestPermission } from '../services/notifications'
 import type { GasSpeed, LocalCurrency } from '../types/settings'
 import AddressBookModal from '../components/AddressBookModal'
+import { useWalletConnection } from '../hooks/useWalletConnection'
 
 function ToggleRow({ icon: Icon, label, description, enabled, onToggle }: {
   icon: typeof Moon; label: string; description?: string; enabled: boolean; onToggle: (v: boolean) => void
@@ -50,17 +51,25 @@ export default function SettingsPage() {
   const s = useSettingsStore()
   const { addresses } = useAddressStore()
   const alerts = useAlertStore()
+  const { user, logout } = useWalletConnection()
   const [showAddressBook, setShowAddressBook] = useState(false)
   const [showAddAlert, setShowAddAlert] = useState(false)
   const [alertSymbol, setAlertSymbol] = useState('ETH')
   const [alertPrice, setAlertPrice] = useState('')
   const [alertDirection, setAlertDirection] = useState<'above' | 'below'>('above')
-  const [profileName, setProfileName] = useState('Alex.eth')
+  const [profileName, setProfileName] = useState('My Wallet')
   const [editingName, setEditingName] = useState(false)
-  const [profilePhoto, setProfilePhoto] = useState('https://i.pravatar.cc/150?u=alex')
+  const [profilePhoto, setProfilePhoto] = useState('https://i.pravatar.cc/150?u=default')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [currencyOpen, setCurrencyOpen] = useState(false)
   const [networkOpen, setNetworkOpen] = useState(false)
+
+  useEffect(() => {
+    if (editingName) return
+    const name = user?.google?.name || user?.github?.name || user?.discord?.username || user?.email?.address || 'My Wallet'
+    setProfileName(name)
+    setProfilePhoto(`https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name)}`)
+  }, [editingName, user])
 
   const currencies: { value: LocalCurrency; label: string; symbol: string }[] = [
     { value: 'usd', label: 'USD', symbol: '$' },
@@ -314,13 +323,13 @@ export default function SettingsPage() {
 
       <div className="px-5 mb-6">
         <div className="bg-surface/50 border border-surfaceLight rounded-[20px] px-4">
-          <ChevronRow icon={LifeBuoy} label="Help Center" />
-          <div className="flex items-center gap-3.5 py-4 cursor-pointer group">
+          <ChevronRow icon={LifeBuoy} label="Help Center" onClick={() => window.alert('Help Center belum tersedia. Hubungi support Nodius untuk bantuan.')} />
+          <button onClick={() => logout()} className="w-full flex items-center gap-3.5 py-4 cursor-pointer group">
             <div className="w-9 h-9 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 group-hover:bg-red-500/20 transition-colors">
               <LogOut size={16} />
             </div>
             <span className="text-sm font-semibold text-red-500">Disconnect Wallet</span>
-          </div>
+          </button>
         </div>
         <p className="text-center text-[11px] text-zinc-600 mt-6 font-mono">Nodius Wallet v0.1.0-beta</p>
       </div>

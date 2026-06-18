@@ -48,9 +48,12 @@ export default function TransferPage() {
       if (network === 'Ethereum') await transfer.sendEVM(address, amount)
       else if (network === 'Solana') await transfer.sendSolana(address, amount)
       else await transfer.sendTON(address, amount)
-    } catch (e: any) {
-      console.error('[TransferPage] transfer failed', e)
-    }
+    } catch {}
+  }
+
+  const handleQrScan = () => {
+    const scanned = window.prompt('Paste scanned wallet address')
+    if (scanned?.trim()) setAddress(scanned.trim())
   }
 
   return (
@@ -90,7 +93,7 @@ export default function TransferPage() {
                   className="w-full bg-surface border border-surfaceLight rounded-[20px] py-4 px-4 pr-24 text-sm font-mono text-white placeholder-zinc-600 outline-none focus:border-neon/50 transition-colors"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1.5">
-                  <button className="w-9 h-9 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400 hover:text-neon hover:border-neon/30 transition-all border border-transparent">
+                  <button onClick={handleQrScan} className="w-9 h-9 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400 hover:text-neon hover:border-neon/30 transition-all border border-transparent">
                     <QrCode size={16} />
                   </button>
                   <button

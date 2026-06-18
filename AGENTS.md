@@ -155,6 +155,48 @@ contracts/
 ✅ **Fase 4.3 selesai.** Push Notifications — service wrapper (Browser Notification API), tx status alert di useTransfer, price alert system.
 ✅ **Fase 4.4 selesai (partial).** Gas Sponsorship Contract (EIP-712) — `NodiusRelay.sol` deployed to Sepolia & Base Sepolia. Backend endpoints work. Frontend uses Privy `useSignTypedData` for gas-free flow.
 
+## Backlog — Yang Perlu Dikerjakan
+
+### 🔴 High Priority (broken UX)
+- [ ] **Receive button** (`HomePage.tsx:261`) — no onClick, harusnya buka QR popup.
+- [ ] **Disconnect Wallet** (`SettingsPage.tsx:318`) — no onClick, harusnya panggil `logout()`.
+- [ ] **Nama & foto profil Settings** (`SettingsPage.tsx:58-60`) — hardcoded `Alex.eth`, pakai dari Privy user.
+- [ ] **Help Center** (`SettingsPage.tsx:317`) — no onClick.
+
+### 🟡 Medium Priority (lengkapi fitur)
+- [ ] **Token selector modal** di SwapPage — kedua token button tidak ada onClick.
+- [ ] **QR scanner** di TransferPage — tombol QrCode next to address input tidak fungsi.
+- [ ] **Swap slippage** — tombol Auto/0.1%/0.5%/1.0% hanya visual, tidak ada state.
+- [ ] **Auto-fetch quote** di Swap — harus auto-quote saat amount berubah (debounce).
+- [ ] **Solana swap** — Jupiter quote ada di service tapi tidak dipanggil.
+
+### 🟢 Low Priority (rapihin)
+- [ ] **Hapus console.error** di `TransferPage.tsx:52`, `useTransfer.ts:115,182`.
+- [ ] **Hapus unused stores** — `transactionStore.ts` tidak dipakai; `walletStore.ts` hanya di-return dari `useWalletConnection`, belum dipakai nyata.
+
+### 🟣 Integration Gaps
+- [ ] **TON balance fetch** (`useBalances.ts:88`) — selalu return `—`, tidak ada RPC call.
+- [ ] **TON disconnect** (`useWalletConnection.ts:49`) — pakai `tonModal.close()` bukan disconnect sesungguhnya.
+- [ ] **Disconnect per-chain** (`useWalletConnection.ts:36,42`) — EVM & Solana disconnect malah `logout()` full.
+- [ ] **TON history** (`HistoryPage.tsx:67`) — `tonAddress` masuk dependency, tapi tidak ada fetch history TON.
+
+### 🔵 Backend / Relayer Gaps
+- [ ] **Solana relay broken** (`relayer.ts:34`) — `/relay/submit` selalu broadcast via `eth_sendRawTransaction`, walau `source: 'solana'`.
+- [ ] **Worker queue tidak efektif** (`worker.ts:39`, `relayer.ts:51`) — worker proses `pending/raw`, tapi `submitRelay` langsung insert status `submitted`.
+- [ ] **Worker chain list tidak sinkron** (`worker.ts:5`) — Sepolia/Base Sepolia ada di relayer, tidak ada di worker.
+- [ ] **Gas pool monitor belum real sync** (`worker.ts:65`) — cuma baca DB dan warn, belum update dari relayer balance/on-chain.
+- [ ] **Missing env guard** (`relayContract.ts:53`) — `RELAYER_PRIVATE_KEY` kosong bisa crash `privateKeyToAccount`.
+
+### 🟤 Bridge / History Gaps
+- [ ] **Bridge EVM-only** (`BridgePage.tsx:17`) — chain list hanya EVM, belum Solana/TON.
+- [ ] **Bridge address mismatch** (`BridgePage.tsx:91,247`) — `fromAddress` bisa Solana/TON, tapi eksekusi wajib `evm.address`.
+- [ ] **Bridge status unused** (`bridge.ts:36`) — `getBridgeStatus` ada tapi belum dipakai untuk tracking.
+
+## Scan Summary
+
+- File inti yang sudah discan: `HomePage`, `SettingsPage`, `SwapPage`, `TransferPage`, `BridgePage`, `HistoryPage`, `WalletPage`, hooks utama, services `swap/relay/bridge/transfer`, backend `index/relayer/relayContract/worker`, contract `NodiusRelay.sol`.
+- File yang belum discan detail penuh: semua `src/components/*`, `src/stores/*`, `src/types/*`, `src/providers/*`, `App.tsx`, `main.tsx`, `services/price/explorer/notifications`, `backend/src/db/*`, `contracts/scripts/*`.
+
 ## Notable
 
 - No CI, no test suite, no codegen.

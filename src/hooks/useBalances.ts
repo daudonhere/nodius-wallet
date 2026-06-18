@@ -33,6 +33,7 @@ export function useBalances() {
 
   const [ethBalance, setEthBalance] = useState<string>('')
   const [solBalance, setSolBalance] = useState<string>('')
+  const [tonBalance, setTonBalance] = useState<string>('')
   const [prices, setPrices] = useState<Record<string, { price: number; change24h: number }>>({})
 
   const SYMBOLS = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'AVAX', 'LINK', 'MATIC', 'ARB', 'DOGE', 'TON', 'UNI']
@@ -52,6 +53,17 @@ export function useBalances() {
       )
     } catch {}
   }, [solana.address])
+
+  useEffect(() => {
+    if (!tonAddress) { setTonBalance(''); return }
+    fetch(`https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(tonAddress)}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.ok && data.result) setTonBalance((Number(data.result) / 1e9).toFixed(4))
+        else setTonBalance('')
+      })
+      .catch(() => setTonBalance(''))
+  }, [tonAddress])
 
   useEffect(() => {
     const fetchAndCheck = async () => {
@@ -85,7 +97,7 @@ export function useBalances() {
   const tokens: BalanceEntry[] = []
   if (ethBalance) tokens.push({ symbol: 'ETH', balance: ethBalance, usdValue: ethBalance, icon: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg' })
   if (solBalance) tokens.push({ symbol: 'SOL', balance: solBalance, usdValue: solBalance, icon: 'https://cryptologos.cc/logos/solana-sol-logo.svg' })
-  if (tonAddress) tokens.push({ symbol: 'TON', balance: '—', usdValue: '', icon: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg' })
+  if (tonAddress) tokens.push({ symbol: 'TON', balance: tonBalance || '0', usdValue: tonBalance || '0', icon: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg' })
 
   const trending: TrendingCoin[] = TRENDING_COINS.map((c) => {
     const p = prices[c.symbol]

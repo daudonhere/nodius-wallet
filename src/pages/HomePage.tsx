@@ -258,7 +258,7 @@ export default function HomePage() {
             </div>
             <span className="text-[11px] font-semibold">Transfer</span>
           </button>
-          <button className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
+          <button onClick={() => wallets[0] && setQrWallet(wallets[0])} disabled={wallets.length === 0} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
             <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
               <ArrowDownToLine size={18} />
             </div>

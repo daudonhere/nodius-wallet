@@ -52,6 +52,13 @@ const RELAY_ABI = [
 
 const RELAYER_PRIVATE_KEY = (process.env.RELAYER_PRIVATE_KEY || '') as `0x${string}`
 
+function getRelayerAccount() {
+  if (!RELAYER_PRIVATE_KEY || !RELAYER_PRIVATE_KEY.startsWith('0x') || RELAYER_PRIVATE_KEY.length !== 66) {
+    throw new Error('RELAYER_PRIVATE_KEY is required and must be a 32-byte 0x private key')
+  }
+  return privateKeyToAccount(RELAYER_PRIVATE_KEY)
+}
+
 function getClients(chainId: number) {
   const chain = CHAINS[chainId]
   if (!chain) throw new Error(`Unsupported chain: ${chainId}`)
@@ -65,7 +72,7 @@ function getClients(chainId: number) {
     : undefined) || chain.rpcUrls.default.http[0]
 
   const publicClient = createPublicClient({ chain, transport: http(rpcUrl) })
-  const account = privateKeyToAccount(RELAYER_PRIVATE_KEY)
+  const account = getRelayerAccount()
   const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) })
 
   return { publicClient, walletClient, account }
@@ -124,7 +131,7 @@ export function getRelayContractAddress(chainId: number): `0x${string}` | null {
 }
 
 export async function getRelayerAddress(): Promise<`0x${string}`> {
-  const account = privateKeyToAccount(RELAYER_PRIVATE_KEY)
+  const account = getRelayerAccount()
   return account.address
 }
 

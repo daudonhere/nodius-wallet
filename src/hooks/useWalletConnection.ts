@@ -1,15 +1,13 @@
-import { useTonAddress, useTonConnectModal } from '@tonconnect/ui-react'
+import { useTonAddress, useTonConnectModal, useTonConnectUI } from '@tonconnect/ui-react'
 import { usePrivy, useWallets as useEvmWallets } from '@privy-io/react-auth'
 import { useWallets as useSolanaWallets } from '@privy-io/react-auth/solana'
-import { useWalletStore } from '../stores/walletStore'
 
 export function useWalletConnection() {
-  const store = useWalletStore()
-
   const { ready, authenticated, user, login, logout, connectWallet } = usePrivy()
   const { wallets: evmWallets } = useEvmWallets()
   const { wallets: solanaWallets } = useSolanaWallets()
   const tonModal = useTonConnectModal()
+  const [tonUI] = useTonConnectUI()
   const tonAddress = useTonAddress()
 
   const evmWallet = evmWallets[0]
@@ -46,8 +44,7 @@ export function useWalletConnection() {
       address: tonAddress,
       connected: !!tonAddress,
       connect: () => tonModal.open(),
-      disconnect: () => tonModal.close(),
+      disconnect: () => tonUI.disconnect(),
     },
-    store,
   }
 }

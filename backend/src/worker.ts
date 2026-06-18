@@ -1,20 +1,27 @@
 import { db } from './db/index'
 import { relayQueue, gasPool } from './db/schema'
 import { eq, and } from 'drizzle-orm'
+import { getRelayerBalance } from './relayContract'
 
 const CHAIN_RPCS: Record<number, string> = {
   1: process.env.ETH_RPC || 'https://eth.llamarpc.com',
   137: process.env.POLYGON_RPC || 'https://polygon.llamarpc.com',
   42161: process.env.ARBITRUM_RPC || 'https://arbitrum.llamarpc.com',
   8453: process.env.BASE_RPC || 'https://base.llamarpc.com',
+  11155111: `https://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY || ''}`,
+  84532: 'https://sepolia.base.org',
 }
+
+const SOLANA_RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com'
 
 const POLL_INTERVAL = 10_000
 const GAS_POLL_INTERVAL = 60_000
 
-async function broadcastTx(signedTx: string, chainId: number): Promise<string> {
-  const rpc = CHAIN_RPCS[chainId]
+async function broadcastTx(signedTx: string, chainId: number, source: string): Promise<string> {
+  const isSolana = source === 'solana'
+  const rpc = isSolana ? SOLANA_RPC : CHAIN_RPCS[chainId]
   if (!rpc) throw new Error(`Unsupported chain: ${chainId}`)
+  const rawTx = isSolana ? Buffer.from(signedTx.replace(/^0x/, ''), 'hex').toString('base64') : signedTx
 
   const res = await fetch(rpc, {
     method: 'POST',
@@ -22,8 +29,8 @@ async function broadcastTx(signedTx: string, chainId: number): Promise<string> {
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
-      method: 'eth_sendRawTransaction',
-      params: [signedTx],
+      method: isSolana ? 'sendTransaction' : 'eth_sendRawTransaction',
+      params: isSolana ? [rawTx, { encoding: 'base64' }] : [rawTx],
     }),
   })
 
@@ -46,7 +53,7 @@ async function processPendingRelays() {
         await db.update(relayQueue).set({ status: 'failed', error: 'No signed tx', completedAt: Date.now() }).where(eq(relayQueue.id, entry.id))
         continue
       }
-      const txHash = await broadcastTx(entry.signedTx, entry.chainId)
+      const txHash = await broadcastTx(entry.signedTx, entry.chainId, entry.source)
       await db
         .update(relayQueue)
         .set({ status: 'submitted', txHash, submittedAt: Date.now() })
@@ -70,7 +77,12 @@ async function checkGasPool() {
     if (!rpc) continue
 
     const nativeSymbol = pool.symbol
-    const balanceWei = BigInt(pool.balance)
+    const liveBalance = await getRelayerBalance(pool.chainId)
+    await db
+      .update(gasPool)
+      .set({ balance: liveBalance })
+      .where(eq(gasPool.id, pool.id))
+    const balanceWei = BigInt(liveBalance)
     const thresholdWei = BigInt(pool.threshold)
 
     if (balanceWei < thresholdWei) {

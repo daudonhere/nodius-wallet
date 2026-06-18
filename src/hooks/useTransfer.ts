@@ -112,7 +112,6 @@ export function useTransfer() {
       }
     } catch (e: any) {
       const msg = e?.message || e?.toString() || 'Unknown error'
-      console.error('[useTransfer] EVM error:', msg)
       setState('error')
       setError(msg)
     }
@@ -179,7 +178,6 @@ export function useTransfer() {
       }
     } catch (e: any) {
       const msg = e?.message || e?.toString() || 'Unknown error'
-      console.error('[useTransfer] Solana error:', msg)
       setState('error')
       setError(msg)
     }

@@ -12,57 +12,63 @@ const CHAIN_RPCS: Record<number, string> = {
   84532: 'https://sepolia.base.org',
 }
 
+const SOLANA_RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com'
+
 export async function submitRelay(
   walletId: string,
   source: string,
   chainId: number,
   signedTx: string
 ): Promise<{ id: number; txHash?: string; error?: string }> {
-  const rpc = CHAIN_RPCS[chainId]
+  const rpc = source === 'solana' ? SOLANA_RPC : CHAIN_RPCS[chainId]
   if (!rpc) return { id: 0, error: `Unsupported chain: ${chainId}` }
+
+  const [entry] = await db.insert(relayQueue).values({
+    walletId,
+    source,
+    chainId,
+    signedTx,
+    status: 'pending',
+    createdAt: Date.now(),
+  }).returning({ id: relayQueue.id })
 
   const maxRetries = 3
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
+      const isSolana = source === 'solana'
+      const rawTx = isSolana ? Buffer.from(signedTx.replace(/^0x/, ''), 'hex').toString('base64') : signedTx
       const res = await fetch(rpc, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jsonrpc: '2.0',
           id: 1,
-          method: 'eth_sendRawTransaction',
-          params: [signedTx],
+          method: isSolana ? 'sendTransaction' : 'eth_sendRawTransaction',
+          params: isSolana ? [rawTx, { encoding: 'base64' }] : [rawTx],
         }),
       })
 
       const data = await res.json()
-      if (data.error) {
-        return { id: 0, error: data.error.message || 'RPC error' }
-      }
+      if (data.error) return { id: entry.id, error: data.error.message || 'RPC error' }
 
       const txHash: string = data.result
 
-      const [entry] = await db.insert(relayQueue).values({
-        walletId,
-        source,
-        chainId,
-        signedTx,
-        status: 'submitted',
-        txHash,
-        createdAt: Date.now(),
-        submittedAt: Date.now(),
-      }).returning({ id: relayQueue.id })
+      await db
+        .update(relayQueue)
+        .set({ status: 'submitted', txHash, submittedAt: Date.now() })
+        .where(eq(relayQueue.id, entry.id))
 
       return { id: entry.id, txHash }
     } catch {
       if (attempt === maxRetries - 1) {
-        return { id: 0, error: 'Broadcast failed after retries' }
+        await markRelayFailed(entry.id, 'Broadcast failed after retries')
+        return { id: entry.id, error: 'Broadcast failed after retries' }
       }
     }
   }
 
-  return { id: 0, error: 'Broadcast failed' }
+  return { id: entry.id, error: 'Broadcast failed' }
 }
 
 export async function getRelayStatus(id: number) {

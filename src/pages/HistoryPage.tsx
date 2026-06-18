@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Search, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, ArrowDownToLine, CheckCircle2, Clock, XCircle, Loader2, RefreshCw, X, Wallet, FileSearch } from 'lucide-react'
 import { useTonAddress } from '@tonconnect/ui-react'
 import { useWalletConnection } from '../hooks/useWalletConnection'
-import { fetchEVMHistory, fetchSolanaHistory } from '../services/explorer'
+import { fetchEVMHistory, fetchSolanaHistory, fetchTONHistory } from '../services/explorer'
 import type { Transaction } from '../types/transaction'
 
 type TxFilter = 'all' | 'sent' | 'received' | 'swap'
@@ -50,6 +50,10 @@ export default function HistoryPage() {
 
     if (solana.address) {
       promises.push(fetchSolanaHistory(solana.address))
+    }
+
+    if (tonAddress) {
+      promises.push(fetchTONHistory(tonAddress))
     }
 
     if (promises.length === 0) {

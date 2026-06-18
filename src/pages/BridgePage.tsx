@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, ChevronDown, ArrowDownUp, Info, Clock, ChevronRight, Globe, Loader2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useSendTransaction } from '@privy-io/react-auth'
-import { useTonAddress } from '@tonconnect/ui-react'
 import { useWalletConnection } from '../hooks/useWalletConnection'
-import { getBridgeQuote, type BridgeQuote } from '../services/bridge'
+import { getBridgeQuote, getBridgeStatus, type BridgeQuote } from '../services/bridge'
 import BottomNavigation from '../components/BottomNavigation'
 
 interface ChainOption {
@@ -74,8 +73,7 @@ function ChainModal({ open, chains, selected, onSelect, onClose }: {
 
 export default function BridgePage() {
   const navigate = useNavigate()
-  const { evm, solana } = useWalletConnection()
-  const tonAddress = useTonAddress()
+  const { evm } = useWalletConnection()
   const { sendTransaction } = useSendTransaction()
 
   const [fromChain, setFromChain] = useState<ChainOption>(chains[0])
@@ -85,10 +83,11 @@ export default function BridgePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
+  const [bridgeStatus, setBridgeStatus] = useState('')
   const [showFromModal, setShowFromModal] = useState(false)
   const [showToModal, setShowToModal] = useState(false)
 
-  const fromAddress = evm.address || solana.address || tonAddress || ''
+  const fromAddress = evm.address || ''
 
   useEffect(() => {
     if (!amount || parseFloat(amount) <= 0 || !fromAddress) {
@@ -125,12 +124,15 @@ export default function BridgePage() {
     if (!quote?.transactionRequest || !evm.address) return
     setSending(true)
     try {
-      await sendTransaction({
+      const { hash } = await sendTransaction({
         to: quote.transactionRequest.to as `0x${string}`,
         data: quote.transactionRequest.data as `0x${string}`,
         value: BigInt(quote.transactionRequest.value || '0'),
         chainId: quote.transactionRequest.chainId,
       })
+      const bridge = (quote as any).tool || (quote as any).includedSteps?.[0]?.tool || 'lifi'
+      const status = await getBridgeStatus(bridge, hash)
+      setBridgeStatus(status || 'submitted')
       navigate('/history')
     } catch {
       setError('Transaction rejected or failed')
@@ -241,6 +243,7 @@ export default function BridgePage() {
         </div>
 
         {error && <p className="text-red-400 text-xs text-center mb-3">{error}</p>}
+        {bridgeStatus && <p className="text-neon text-xs text-center mb-3">Bridge status: {bridgeStatus}</p>}
 
         <button
           onClick={handleReview}
