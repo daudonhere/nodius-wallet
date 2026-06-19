@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { encodeFunctionData, formatUnits, parseUnits } from 'viem'
+import { VersionedTransaction } from '@solana/web3.js'
+import { createPublicClient, encodeFunctionData, formatUnits, http, parseUnits } from 'viem'
+import { arbitrum, base, mainnet, polygon } from 'viem/chains'
 import { ArrowLeft, SlidersHorizontal, ChevronDown, ArrowDownUp, Info, Zap, Loader2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useSendTransaction, useSignTypedData } from '@privy-io/react-auth'
+import { useSignAndSendTransaction, useSignTransaction } from '@privy-io/react-auth/solana'
+import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
 import { useWalletConnection } from '../hooks/useWalletConnection'
 import BottomNavigation from '../components/BottomNavigation'
 import NeonButton from '../components/NeonButton'
-import { getJupiterTokens, getLifiQuote, getLifiTokens, getZeroXQuote } from '../services/swap'
-import { submitRelayTx } from '../services/relay'
+import { getJupiterQuote, getJupiterSwapTransaction, getJupiterTokens, getLifiQuote, getLifiTokens, getStonfiQuote, getStonfiSwapTransaction, getStonfiTokens, getZeroXQuote } from '../services/swap'
+import { getSponsoredRelayInfo, getSponsoredSolanaSwap, submitRelayTx } from '../services/relay'
 import { useBalances } from '../hooks/useBalances'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { SwapQuote } from '../services/swap'
@@ -37,6 +41,13 @@ const CHAIN_IDS: Record<string, number> = {
 
 const POPULAR_TOKEN_SYMBOLS = new Set(['ETH', 'WETH', 'USDC', 'USDT', 'DAI', 'WBTC', 'LINK', 'UNI', 'AAVE', 'MATIC', 'POL', 'ARB', 'SOL', 'JUP', 'JTO', 'BONK', 'WIF', 'PYTH', 'RAY', 'ORCA'])
 
+const VIEM_CHAINS = {
+  Ethereum: mainnet,
+  Base: base,
+  Polygon: polygon,
+  Arbitrum: arbitrum,
+}
+
 const ERC20_APPROVE_ABI = [{
   type: 'function',
   name: 'approve',
@@ -65,9 +76,13 @@ const formatUsd = (n: number) => '$' + n.toLocaleString('en-US', { minimumFracti
 
 export default function SwapPage() {
   const navigate = useNavigate()
-  const { evm } = useWalletConnection()
+  const { evm, solana } = useWalletConnection()
   const { sendTransaction } = useSendTransaction()
   const { signTypedData } = useSignTypedData()
+  const { signAndSendTransaction: solanaSignAndSend } = useSignAndSendTransaction()
+  const { signTransaction: solanaSign } = useSignTransaction()
+  const tonAddress = useTonAddress()
+  const [tonUI] = useTonConnectUI()
   const { tokens, prices, isLoadingAssets } = useBalances()
   const gasFeeRouting = useSettingsStore((s) => s.gasFeeRouting)
 
@@ -75,6 +90,7 @@ export default function SwapPage() {
   const [toToken, setToToken] = useState<SwapToken>(EMPTY_TOKEN)
   const [fromAmount, setFromAmount] = useState('0')
   const [quote, setQuote] = useState<SwapQuote | null>(null)
+  const [quoteAt, setQuoteAt] = useState(0)
   const [loadingQuote, setLoadingQuote] = useState(false)
   const [sending, setSending] = useState(false)
   const [txHash, setTxHash] = useState('')
@@ -84,7 +100,12 @@ export default function SwapPage() {
   const [slippage, setSlippage] = useState('Auto')
   const [swapTokenList, setSwapTokenList] = useState<SwapToken[]>([])
   const [loadingTokenList, setLoadingTokenList] = useState(true)
-  const [aggregator, setAggregator] = useState<'0x' | 'LI.FI' | 'Jupiter'>('0x')
+  const [aggregator, setAggregator] = useState<'0x' | 'LI.FI' | 'Jupiter' | 'STON.fi'>('0x')
+  const [sponsoredInfo, setSponsoredInfo] = useState<{ solana: { configured: boolean; address: string | null }; ton: { configured: boolean; address: string | null } } | null>(null)
+
+  useEffect(() => {
+    getSponsoredRelayInfo().then(setSponsoredInfo)
+  }, [])
 
   const activeChainName = fromToken.chainName || CHAIN_NAMES[evm.chainId || 1] || 'Ethereum'
 
@@ -115,9 +136,20 @@ export default function SwapPage() {
   const toUsd = '~' + formatUsd(Number(toAmount || '0') * toPrice)
   const amountExceedsBalance = Number(fromAmount || '0') > Number(fromToken.balance || '0')
   const slippagePercentage = slippage === 'Auto' ? '0.005' : (parseFloat(slippage) / 100).toString()
-  const supportedChain = fromToken.chainName === 'Ethereum' || fromToken.chainName === 'Base' || fromToken.chainName === 'Polygon' || fromToken.chainName === 'Arbitrum'
-  const aggregatorOptions = fromToken.chainName === 'Solana' ? (['Jupiter'] as const) : (['0x', 'LI.FI'] as const)
+  const supportedChain = fromToken.chainName === 'Ethereum' || fromToken.chainName === 'Base' || fromToken.chainName === 'Polygon' || fromToken.chainName === 'Arbitrum' || fromToken.chainName === 'Solana' || fromToken.chainName === 'TON'
+  const aggregatorOptions = fromToken.chainName === 'Solana' ? (['Jupiter'] as const) : fromToken.chainName === 'TON' ? (['STON.fi'] as const) : (['0x', 'LI.FI'] as const)
   const isInitialSwapLoading = isLoadingAssets || loadingTokenList
+  const quoteExpired = !!quoteAt && Date.now() - quoteAt > 25_000
+  const priceImpact = Number(quote?.priceImpact || '0')
+  const chainMismatch = !!evm.chainId && !!CHAIN_IDS[fromToken.chainName] && evm.chainId !== CHAIN_IDS[fromToken.chainName]
+  const solanaSponsored = !!sponsoredInfo?.solana?.configured
+  const tonSponsored = !!sponsoredInfo?.ton?.configured
+  const gasFreeAvailable = gasFeeRouting && (
+    (aggregator === 'Jupiter' && solanaSponsored) ||
+    (aggregator === 'STON.fi' && tonSponsored) ||
+    (aggregator !== 'Jupiter' && aggregator !== 'STON.fi' && (!quote?.allowanceTarget || fromToken.symbol === 'ETH'))
+  )
+  const gasFreeBlocked = gasFeeRouting && quote && !gasFreeAvailable && (aggregator !== 'STON.fi' || !tonSponsored)
   const pickerTokens = tokenPicker === 'from' ? sourceTokenOptions : destinationTokenOptions
 
   const SkeletonBlock = ({ className }: { className: string }) => (
@@ -150,11 +182,32 @@ export default function SwapPage() {
     setError('')
     const amount = parseUnits(fromAmount, fromToken.decimals).toString()
     const chainId = CHAIN_IDS[fromToken.chainName] || 1
-    const q = aggregator === 'LI.FI'
-      ? await getLifiQuote(chainId, fromToken.address, toToken.address, evm.address || '', amount, slippagePercentage)
-      : await getZeroXQuote(fromToken.address, toToken.address, amount, chainId, slippagePercentage)
+    const jupiterSlippage = slippage === 'Auto' ? '50' : Math.round(parseFloat(slippage) * 100).toString()
+    const getQuote = async (item: typeof aggregator) => item === 'Jupiter'
+      ? getJupiterQuote(fromToken.address, toToken.address, amount, jupiterSlippage)
+      : item === 'STON.fi'
+        ? getStonfiQuote(fromToken.address, toToken.address, amount, slippagePercentage)
+        : item === 'LI.FI'
+          ? getLifiQuote(chainId, fromToken.address, toToken.address, evm.address || '', amount, slippagePercentage)
+          : getZeroXQuote(fromToken.address, toToken.address, amount, chainId, slippagePercentage)
+
+    let q = await getQuote(aggregator)
+    let selectedAggregator = aggregator
+    if (!q) {
+      for (const item of aggregatorOptions) {
+        if (item === aggregator) continue
+        q = await getQuote(item)
+        if (q) {
+          selectedAggregator = item
+          setAggregator(item)
+          break
+        }
+      }
+    }
     setQuote(q)
-    if (!q) setError('Could not fetch quote')
+    setQuoteAt(q ? Date.now() : 0)
+    if (!q) setError(`No quote for ${fromToken.symbol} → ${toToken.symbol} on ${fromToken.chainName}`)
+    else if (selectedAggregator !== aggregator) setError(`Switched to ${selectedAggregator} for better route`)
     setLoadingQuote(false)
   }
 
@@ -166,9 +219,11 @@ export default function SwapPage() {
       const chainId = CHAIN_IDS[chainName]
       const list = chainName === 'Solana'
         ? await getJupiterTokens()
-        : chainId
-          ? (await getLifiTokens(chainId))
-          : []
+        : chainName === 'TON'
+          ? await getStonfiTokens()
+          : chainId
+            ? (await getLifiTokens(chainId))
+            : []
       if (cancelled) return
       const popularList = list.filter((token) => POPULAR_TOKEN_SYMBOLS.has(token.symbol?.toUpperCase()))
       setSwapTokenList(popularList.map((token) => ({
@@ -200,21 +255,91 @@ export default function SwapPage() {
 
   useEffect(() => {
     setQuote(null)
-    if (!evm.address || !fromAmount || parseFloat(fromAmount) <= 0 || fromToken.address === toToken.address) return
+    const connectedAddress = aggregator === 'Jupiter' ? solana.address : aggregator === 'STON.fi' ? tonAddress : evm.address
+    if (!connectedAddress || !fromAmount || parseFloat(fromAmount) <= 0 || fromToken.address === toToken.address) return
     const timer = setTimeout(() => {
       fetchQuote()
     }, 600)
     return () => clearTimeout(timer)
-  }, [aggregator, evm.address, evm.chainId, fromAmount, fromToken.address, fromToken.decimals, toToken.address, slippage])
+  }, [aggregator, evm.address, evm.chainId, solana.address, tonAddress, fromAmount, fromToken.address, fromToken.decimals, toToken.address, slippage])
 
   const handleSwap = async () => {
+    if (aggregator === 'STON.fi') {
+      if (!tonAddress || !quote?.raw) return
+      setSending(true)
+      setError('')
+      try {
+        const txParams = await getStonfiSwapTransaction(quote.raw, tonAddress)
+        await tonUI.sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 600,
+          messages: [{
+            address: txParams.to.toString(),
+            amount: txParams.value.toString(),
+            payload: txParams.body?.toBoc().toString('base64'),
+          }],
+        })
+        setTxHash('TON transaction submitted')
+      } catch {
+        setError('STON.fi swap rejected or failed')
+      }
+      setSending(false)
+      return
+    }
+
+    if (aggregator === 'Jupiter') {
+      if (!solana.address || !solana.wallet || !quote?.raw) return
+      setSending(true)
+      setError('')
+      try {
+        if (gasFreeAvailable) {
+          const partial = await getSponsoredSolanaSwap(quote.raw, solana.address)
+          const txBytes = Uint8Array.from(atob(partial.partiallySignedTx), (c) => c.charCodeAt(0))
+          const transaction = VersionedTransaction.deserialize(txBytes)
+          const signedResult: any = await solanaSign({
+            transaction: transaction.serialize(),
+            wallet: solana.wallet,
+            chain: 'solana:mainnet',
+          })
+          const signedBytes: Uint8Array = signedResult.signedTransaction ?? signedResult.transaction ?? signedResult
+          const serialized = Buffer.from(signedBytes).toString('hex')
+          const result = await submitRelayTx({
+            walletId: solana.address,
+            source: 'solana',
+            chainId: 900,
+            signedTx: serialized,
+          })
+          if (result.txHash) {
+            setTxHash(result.txHash)
+            setSending(false)
+            return
+          }
+          throw new Error('Solana relayer did not return tx hash')
+        }
+
+        const swapTransaction = await getJupiterSwapTransaction(quote.raw, solana.address)
+        if (!swapTransaction) throw new Error('Could not build Jupiter swap transaction')
+        const transaction = VersionedTransaction.deserialize(Uint8Array.from(atob(swapTransaction), (char) => char.charCodeAt(0)))
+
+        const { signature } = await solanaSignAndSend({
+          transaction: transaction.serialize(),
+          wallet: solana.wallet,
+          chain: 'solana:mainnet',
+        })
+        setTxHash(Buffer.from(signature).toString('hex'))
+      } catch {
+        setError('Jupiter swap rejected or failed')
+      }
+      setSending(false)
+      return
+    }
+
     if (!evm.address || !quote?.tx) return
     setSending(true)
     setError('')
 
     try {
       if (quote.allowanceTarget && fromToken.symbol !== 'ETH') {
-        await sendTransaction({
+        const { hash } = await sendTransaction({
           to: fromToken.address as `0x${string}`,
           data: encodeFunctionData({
             abi: ERC20_APPROVE_ABI,
@@ -223,9 +348,14 @@ export default function SwapPage() {
           }),
           value: 0n,
         })
+        const chain = VIEM_CHAINS[fromToken.chainName as keyof typeof VIEM_CHAINS]
+        if (chain) {
+          const client = createPublicClient({ chain, transport: http() })
+          await client.waitForTransactionReceipt({ hash })
+        }
       }
 
-      if (gasFeeRouting && evm.chainId) {
+      if (gasFreeAvailable && evm.chainId) {
         const { signature } = await signTypedData({
           domain: {
             name: 'NodiusRelay',
@@ -392,16 +522,16 @@ export default function SwapPage() {
           <div className="flex justify-between items-center mb-3.5 text-[13px]">
             <span className="text-zinc-400 font-medium">Network Fee</span>
             <div className="flex items-center gap-2">
-              {loadingQuote || isInitialSwapLoading ? <SkeletonBlock className="w-20 h-4 rounded-md" /> : gasFeeRouting ? (
+              {loadingQuote || isInitialSwapLoading ? <SkeletonBlock className="w-20 h-4 rounded-md" /> : gasFreeAvailable ? (
                 <>
-                  <span className="line-through text-zinc-600 font-mono">{quote?.estimatedGas ? `${quote.estimatedGas} gas` : '—'}</span>
+                  <span className="line-through text-zinc-600 font-mono">{quote?.feeUsd ? `$${Number(quote.feeUsd).toFixed(2)}` : quote?.estimatedGas ? `${quote.estimatedGas} gas` : '—'}</span>
                   <div className="flex items-center gap-1 bg-neon/10 px-2 py-0.5 rounded-md">
                     <Zap size={12} className="text-neon" />
                     <span className="text-neon font-bold text-[11px] uppercase tracking-wide">Free</span>
                   </div>
                 </>
               ) : (
-                <span className="font-mono text-zinc-200">{quote?.estimatedGas ? `${quote.estimatedGas} gas` : '—'}</span>
+                <span className="font-mono text-zinc-200">{quote?.feeUsd ? `$${Number(quote.feeUsd).toFixed(2)}` : quote?.estimatedGas ? `${quote.estimatedGas} gas` : '—'}</span>
               )}
             </div>
           </div>
@@ -423,11 +553,28 @@ export default function SwapPage() {
               </button>
             )}
           </div>
-          {(amountExceedsBalance || error) && (
+          {(amountExceedsBalance || error || quoteExpired || priceImpact > 0.05 || chainMismatch || gasFreeBlocked) && (
             <div className="mt-3 pt-3 border-t border-surfaceLight">
-              <p className="text-xs text-zinc-500 text-center">
-                {amountExceedsBalance ? `Insufficient ${fromToken.symbol} balance` : error}
-              </p>
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-xs text-zinc-500 text-center">
+                  {amountExceedsBalance
+                    ? `Insufficient ${fromToken.symbol} balance`
+                    : error
+                      ? error
+                      : chainMismatch
+                        ? `Switch wallet to ${fromToken.chainName}`
+                        : gasFreeBlocked
+                          ? 'Gas-free is not available for this route. Choose an EVM gas-free route or turn off 0 Gas Fee Routing.'
+                          : quoteExpired
+                          ? 'Quote may be stale. Refresh quote before swapping.'
+                          : `High price impact: ${(priceImpact * 100).toFixed(2)}%`}
+                </p>
+                {quoteExpired && (
+                  <button onClick={fetchQuote} className="text-[11px] font-bold text-neon hover:text-white transition-colors">
+                    Refresh quote
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -438,7 +585,7 @@ export default function SwapPage() {
           </div>
         )}
 
-        <NeonButton onClick={quote ? handleSwap : fetchQuote} disabled={!evm.address || sending || loadingQuote || isLoadingAssets || amountExceedsBalance || !fromToken.address || !toToken.address || !fromAmount || parseFloat(fromAmount) <= 0 || !supportedChain}>
+        <NeonButton onClick={quote ? handleSwap : fetchQuote} disabled={!(aggregator === 'Jupiter' ? solana.address : aggregator === 'STON.fi' ? tonAddress : evm.address) || sending || loadingQuote || isLoadingAssets || amountExceedsBalance || chainMismatch || quoteExpired || gasFreeBlocked || !fromToken.address || !toToken.address || !fromAmount || parseFloat(fromAmount) <= 0 || !supportedChain}>
           {!supportedChain ? 'Unsupported swap chain'
             : loadingQuote ? <><Loader2 size={18} className="animate-spin" /> Getting Quote...</>
             : sending ? <><Loader2 size={18} className="animate-spin" /> Swapping...</>

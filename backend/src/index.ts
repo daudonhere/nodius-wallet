@@ -12,6 +12,9 @@ import {
   markRelayFailed,
 } from './relayer'
 import { getRelayContractAddress, getRelayerAddress, getRelayerBalance } from './relayContract'
+import { getSponsoredRelayerInfo } from './sponsoredRelayers'
+import { buildSponsoredSolanaSwap } from './solanaSponsor'
+import { buildExternalMessageBoc, sendTonExternalMessage } from './tonSponsor'
 import { initDb } from './db/index'
 import { startWorker } from './worker'
 
@@ -64,6 +67,39 @@ app.post('/relay/meta-submit', async (c) => {
   }
 
   return c.json(result, 201)
+})
+
+app.get('/relay/sponsored-info', async (c) => {
+  return c.json(await getSponsoredRelayerInfo())
+})
+
+app.post('/relay/sponsored-solana-swap', async (c) => {
+  const { quoteResponse, userAddress } = await c.req.json()
+  if (!quoteResponse || !userAddress) {
+    return c.json({ error: 'Missing required fields: quoteResponse, userAddress' }, 400)
+  }
+
+  try {
+    const result = await buildSponsoredSolanaSwap(quoteResponse, userAddress)
+    return c.json(result)
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Sponsored Solana swap failed' }, 500)
+  }
+})
+
+app.post('/relay/sponsored-ton-swap', async (c) => {
+  const { walletAddress, target, value, seqno, signatureBase64 } = await c.req.json()
+  if (!walletAddress || !target || value == null || seqno == null || !signatureBase64) {
+    return c.json({ error: 'Missing required fields: walletAddress, target, value, seqno, signatureBase64' }, 400)
+  }
+
+  try {
+    const bocBase64 = buildExternalMessageBoc(walletAddress, target, value, seqno, signatureBase64)
+    const txHash = await sendTonExternalMessage(bocBase64)
+    return c.json({ txHash })
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Sponsored TON swap failed' }, 500)
+  }
 })
 
 app.get('/relay/info/:chainId', async (c) => {

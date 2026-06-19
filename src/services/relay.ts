@@ -87,6 +87,47 @@ export async function getNonce(walletAddress: string, chainId: number) {
   return res.json() as Promise<{ wallet: string; chainId: number; nonce: number }>
 }
 
+export async function getSponsoredRelayInfo() {
+  const res = await fetch(`${BACKEND_URL}/relay/sponsored-info`)
+  if (!res.ok) return null
+  return res.json() as Promise<{
+    solana: { configured: boolean; address: string | null }
+    ton: { configured: boolean; address: string | null }
+  }>
+}
+
+export async function getSponsoredSolanaSwap(quoteResponse: any, userAddress: string) {
+  const res = await fetch(`${BACKEND_URL}/relay/sponsored-solana-swap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quoteResponse, userAddress }),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error || 'Sponsored Solana swap failed')
+  }
+  return res.json() as Promise<{ partiallySignedTx: string }>
+}
+
+export async function submitSponsoredTonSwap(params: {
+  walletAddress: string
+  target: string
+  value: string
+  seqno: number
+  signatureBase64: string
+}) {
+  const res = await fetch(`${BACKEND_URL}/relay/sponsored-ton-swap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error || 'Sponsored TON swap failed')
+  }
+  return res.json() as Promise<{ txHash: string }>
+}
+
 export async function getGasPool(chainId: number) {
   const res = await fetch(`${BACKEND_URL}/gas-pool/${chainId}`)
   if (!res.ok) return null

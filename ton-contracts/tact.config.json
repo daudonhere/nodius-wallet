@@ -1,0 +1,9 @@
+{
+  "projects": [
+    {
+      "name": "TonGaslessWallet",
+      "path": "./contracts/TonGaslessWallet.tact",
+      "output": "./build"
+    }
+  ]
+}

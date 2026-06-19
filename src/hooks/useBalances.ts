@@ -133,7 +133,7 @@ async function fetchTonAssets(address: string): Promise<BalanceEntry[]> {
     const balanceRes = await fetch(`https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(address)}`)
     const balanceData = balanceRes.ok ? await balanceRes.json() : null
     const ton = balanceData?.ok && balanceData.result ? (Number(balanceData.result) / 1e9).toString() : '0'
-    if (Number(ton) > 0) assets.push({ symbol: 'TON', balance: ton, usdValue: ton, icon: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg', chainName: 'TON' })
+    if (Number(ton) > 0) assets.push({ symbol: 'TON', balance: ton, usdValue: ton, icon: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg', chainName: 'TON', address: 'ton', decimals: 9 })
   } catch {}
 
   try {
@@ -152,6 +152,8 @@ async function fetchTonAssets(address: string): Promise<BalanceEntry[]> {
         usdValue: balance,
         icon: item.jetton?.image || 'https://cryptologos.cc/logos/toncoin-ton-logo.svg',
         chainName: 'TON',
+        address: item.jetton?.address,
+        decimals,
       })
     }
   } catch {}

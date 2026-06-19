@@ -1,0 +1,17 @@
+{
+  "name": "nodius-ton-contracts",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "compile": "tact --config tact.config.json",
+    "deploy": "tsx scripts/deploy.ts"
+  },
+  "dependencies": {
+    "@orbs-network/ton-access": "^2.3.3",
+    "@tact-lang/compiler": "^1.6.0",
+    "@ton/crypto": "^3.3.0",
+    "@ton/ton": "^16.3.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}
