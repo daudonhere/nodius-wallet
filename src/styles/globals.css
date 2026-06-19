@@ -16,3 +16,33 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@keyframes swap-token-drawer-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes swap-token-drawer-out {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.swap-token-drawer {
+  animation: swap-token-drawer-in 220ms ease-out;
+}
+
+.swap-token-drawer-out {
+  animation: swap-token-drawer-out 180ms ease-in forwards;
+}

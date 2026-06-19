@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { QrCode, Bell, Copy, ArrowLeftRight, GitMerge, Upload, ArrowDownToLine, TrendingUp, TrendingDown, Wallet, Coins, Download, X } from 'lucide-react'
+import { QrCode, Bell, Copy, ArrowLeftRight, GitMerge, Upload, ArrowDownToLine, TrendingUp, TrendingDown, Wallet, Coins, Download, X, LoaderCircle } from 'lucide-react'
 import { useTonAddress } from '@tonconnect/ui-react'
 import { useWalletConnection } from '../hooks/useWalletConnection'
 import { useBalances } from '../hooks/useBalances'
@@ -28,8 +28,10 @@ export default function HomePage() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
   const [qrWallet, setQrWallet] = useState<WalletCard | null>(null)
-  const { tokens, prices } = useBalances()
-  const { evm, solana, user, authenticated } = useWalletConnection()
+  const [qrSaving, setQrSaving] = useState(false)
+  const { tokens, prices, isLoadingAssets, isLoadingPrices } = useBalances()
+  const isInitialDataLoading = isLoadingAssets || isLoadingPrices
+  const { privy, evm, solana, user, authenticated } = useWalletConnection()
   const tonAddress = useTonAddress()
 
   const userPhoto = null
@@ -44,27 +46,44 @@ export default function HomePage() {
     ? `${tokens.filter(t => t.balance && t.balance !== '—' && parseFloat(t.balance) > 0).length} assets across chains`
     : '—'
 
-  const anyConnected = (authenticated && evm.connected && evm.address) || (authenticated && solana.connected && solana.address) || !!tonAddress
+  const getUsdValue = (symbol: string, balance: string) => {
+    const price = prices[symbol]?.price
+    return price && balance !== '—' ? parseFloat(balance) * price : 0
+  }
 
-  const primaryAddress = evm.address || solana.address || tonAddress || ''
-  const primaryAddressShort = primaryAddress ? `${primaryAddress.slice(0, 6)}...${primaryAddress.slice(-4)}` : ''
+  const getChainUsdValue = (chainName: string) => tokens
+    .filter((t) => t.chainName === chainName)
+    .reduce((sum, t) => sum + getUsdValue(t.symbol, t.balance), 0)
 
-  const ethToken = tokens.find(t => t.symbol === 'ETH')
-  const solToken = tokens.find(t => t.symbol === 'SOL')
-  const tonToken = tokens.find(t => t.symbol === 'TON')
+  const getNativeToken = (chainName: string, symbol: string) => tokens.find((t) => t.chainName === chainName && t.symbol === symbol)
+  const getChainAssetLine = (chainName: string) => {
+    const count = tokens.filter((t) => t.chainName === chainName && t.balance && t.balance !== '—' && parseFloat(t.balance) > 0).length
+    return count ? `${count} ${count === 1 ? 'asset' : 'assets'}` : '—'
+  }
+
+  const anyConnected = (authenticated && privy.connected) || (authenticated && evm.externalConnected && evm.externalAddress) || (authenticated && solana.externalConnected && solana.externalAddress) || !!tonAddress
+  const nodiusAddress = privy.primaryAddress || ''
+  const nodiusAddressShort = nodiusAddress ? `${nodiusAddress.slice(0, 6)}...${nodiusAddress.slice(-4)}` : ''
+
+  const ethToken = getNativeToken('Ethereum', 'ETH')
+  const solToken = getNativeToken('Solana', 'SOL')
+  const tonToken = getNativeToken('TON', 'TON')
+  const evmUsdValue = ['Ethereum', 'Base', 'Polygon', 'Arbitrum'].reduce((sum, chainName) => sum + getChainUsdValue(chainName), 0)
+  const solanaUsdValue = getChainUsdValue('Solana')
+  const tonUsdValue = getChainUsdValue('TON')
 
   const wallets: WalletCard[] = [
     ...(anyConnected ? [{
-      name: 'Nodius Wallet', icon: 'https://api.dicebear.com/7.x/shapes/svg?seed=nodius&size=32', address: primaryAddressShort, copyAddress: primaryAddress, balance: totalUsdBalance.toFixed(2), usdValue: '', tokenLine: balanceLine, glow: 'bg-neon',
+      name: 'Nodius Wallet', icon: 'https://api.dicebear.com/7.x/shapes/svg?seed=nodius&size=32', address: nodiusAddressShort, copyAddress: nodiusAddress, balance: totalUsdBalance.toFixed(2), usdValue: '', tokenLine: balanceLine, glow: 'bg-neon',
     }] : []),
-    ...(authenticated && evm.connected && evm.address ? [{
-      name: 'EVM', icon: walletIcons.EVM, address: `${evm.address.slice(0, 6)}...${evm.address.slice(-4)}`, copyAddress: evm.address, balance: ethToken?.balance ?? '0', usdValue: ethToken?.balance && prices.ETH?.price ? (parseFloat(ethToken.balance) * prices.ETH.price).toFixed(2) : '0', tokenLine: ethToken?.balance ? `${parseFloat(ethToken.balance).toFixed(4)} ETH` : '', glow: 'bg-neon',
+    ...(authenticated && evm.externalConnected && evm.externalAddress ? [{
+      name: 'EVM', icon: walletIcons.EVM, address: `${evm.externalAddress.slice(0, 6)}...${evm.externalAddress.slice(-4)}`, copyAddress: evm.externalAddress, balance: ethToken?.balance ?? '0', usdValue: evmUsdValue.toFixed(2), tokenLine: ethToken?.balance ? `${parseFloat(ethToken.balance).toFixed(4)} ETH · ${getChainAssetLine('Ethereum')}` : getChainAssetLine('Ethereum'), glow: 'bg-neon',
     }] : []),
-    ...(authenticated && solana.connected && solana.address ? [{
-      name: 'Solana', icon: walletIcons.Solana, address: `${solana.address.slice(0, 4)}...${solana.address.slice(-4)}`, copyAddress: solana.address, balance: solToken?.balance ?? '0', usdValue: solToken?.balance && prices.SOL?.price ? (parseFloat(solToken.balance) * prices.SOL.price).toFixed(2) : '0', tokenLine: solToken?.balance ? `${parseFloat(solToken.balance).toFixed(4)} SOL` : '', glow: 'bg-[#ab9ff2]',
+    ...(authenticated && solana.externalConnected && solana.externalAddress ? [{
+      name: 'Solana', icon: walletIcons.Solana, address: `${solana.externalAddress.slice(0, 4)}...${solana.externalAddress.slice(-4)}`, copyAddress: solana.externalAddress, balance: solToken?.balance ?? '0', usdValue: solanaUsdValue.toFixed(2), tokenLine: solToken?.balance ? `${parseFloat(solToken.balance).toFixed(4)} SOL · ${getChainAssetLine('Solana')}` : getChainAssetLine('Solana'), glow: 'bg-[#ab9ff2]',
     }] : []),
     ...(tonAddress ? [{
-      name: 'TON', icon: walletIcons.TON, address: `${tonAddress.slice(0, 4)}...${tonAddress.slice(-4)}`, copyAddress: tonAddress, balance: tonToken?.balance ?? '—', usdValue: '', tokenLine: tonToken?.balance && tonToken.balance !== '—' ? `${parseFloat(tonToken.balance).toFixed(4)} TON` : '', glow: 'bg-[#0098EA]',
+      name: 'TON', icon: walletIcons.TON, address: `${tonAddress.slice(0, 4)}...${tonAddress.slice(-4)}`, copyAddress: tonAddress, balance: tonToken?.balance ?? '0', usdValue: tonUsdValue.toFixed(2), tokenLine: tonToken?.balance && tonToken.balance !== '—' ? `${parseFloat(tonToken.balance).toFixed(4)} TON · ${getChainAssetLine('TON')}` : getChainAssetLine('TON'), glow: 'bg-[#0098EA]',
     }] : []),
   ]
 
@@ -79,7 +98,7 @@ export default function HomePage() {
 
   const ownedTokens = tokens.filter(t => t.balance && t.balance !== '—' && parseFloat(t.balance) > 0 && prices[t.symbol]?.price != null)
 
-  interface ChainGroup { name: string; icon: string; tokens: { symbol: string; balance: string; icon?: string; usdValue?: string; change24h?: number }[] }
+  interface ChainGroup { name: string; icon: string; tokens: { symbol: string; balance: string; icon?: string; chainIcon: string; chainName: string; usdValue?: string; change24h?: number }[] }
 
   const chainGroups = ownedTokens.reduce<Record<string, ChainGroup>>((acc, t) => {
     const chainName = t.chainName || 'Other'
@@ -90,6 +109,8 @@ export default function HomePage() {
       symbol: t.symbol,
       balance: t.balance,
       icon: t.icon,
+      chainIcon: icon,
+      chainName,
       usdValue: priceInfo?.price != null ? (parseFloat(t.balance) * priceInfo.price).toFixed(2) : undefined,
       change24h: priceInfo?.change24h ?? undefined,
     })
@@ -102,6 +123,19 @@ export default function HomePage() {
     const cardWidth = el.querySelector('div:first-child')?.clientWidth ?? 1
     setActiveIndex(Math.round(el.scrollLeft / (cardWidth + 16)))
   }
+
+  const getReceiveNote = (wallet: WalletCard) => {
+    if (wallet.name === 'Nodius Wallet' && wallet.copyAddress === privy.evmAddress) return 'Use Ethereum, Base, Polygon, or Arbitrum network.'
+    if (wallet.name === 'Nodius Wallet' && wallet.copyAddress === privy.solanaAddress) return 'Use Solana network.'
+    if (wallet.name === 'EVM') return 'Use Ethereum, Base, Polygon, or Arbitrum network.'
+    if (wallet.name === 'Solana') return 'Use Solana network.'
+    if (wallet.name === 'TON') return 'Use TON network.'
+    return 'Use matching wallet network.'
+  }
+
+  const SkeletonBlock = ({ className }: { className: string }) => (
+    <div className={`animate-pulse rounded-full bg-surfaceLight/70 ${className}`} />
+  )
 
   return (
     <>
@@ -175,16 +209,32 @@ export default function HomePage() {
         </>
       )}
 
-      {wallets.length === 0 ? (
+      {isInitialDataLoading ? (
+        <div className="mt-4 mb-5 px-5">
+          <div className="bg-gradient-to-br from-[#111111] to-[#0a0a0a] rounded-[28px] p-6 border border-neon relative overflow-hidden" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
+            <div className="absolute -right-10 -top-10 w-32 h-32 bg-neon opacity-10 rounded-full blur-[40px]" />
+            <div className="flex justify-between items-start mb-6 relative z-10">
+              <div className="flex items-center gap-2.5 bg-surfaceLight/50 px-3 py-1.5 rounded-full border border-white/5">
+                <SkeletonBlock className="w-5 h-5" />
+                <SkeletonBlock className="w-24 h-3" />
+              </div>
+              <SkeletonBlock className="w-8 h-8" />
+            </div>
+            <div className="relative z-10">
+              <SkeletonBlock className="w-28 h-3 mb-3 rounded-md" />
+              <SkeletonBlock className="w-44 h-9 mb-3 rounded-xl" />
+              <SkeletonBlock className="w-36 h-3 mb-4 rounded-md" />
+              <SkeletonBlock className="w-32 h-6 rounded-md" />
+            </div>
+          </div>
+        </div>
+      ) : wallets.length === 0 ? (
         <div className="mt-4 mb-5 px-5">
           <div className="bg-gradient-to-br from-[#111111] to-[#0a0a0a] rounded-[28px] p-10 border border-neon flex flex-col items-center justify-center gap-4 text-center" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
             <div className="w-16 h-16 rounded-full bg-surface border border-surfaceLight flex items-center justify-center">
               <Wallet size={28} className="text-neon" />
             </div>
-            <div>
-              <h3 className="text-base font-bold">No Wallet Connected</h3>
-              <p className="text-sm text-zinc-500 mt-1">Connect a blockchain to see your wallet</p>
-            </div>
+            <h3 className="text-base font-bold">Login or Connect Your Wallet</h3>
           </div>
         </div>
       ) : (
@@ -207,16 +257,25 @@ export default function HomePage() {
                 </div>
                 <div className="relative z-10">
                   <p className="text-xs text-zinc-400 font-medium mb-1">{wallet.name === 'Nodius Wallet' ? 'Total Portfolio' : wallet.name}</p>
-                  <h2 className="text-[32px] font-bold font-mono tracking-tight mb-1">
-                    {wallet.name === 'Nodius Wallet'
-                      ? `$${totalUsdBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : wallet.usdValue
-                        ? `$${parseFloat(wallet.usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        : wallet.balance !== '—'
-                          ? `${parseFloat(wallet.balance).toFixed(4)}`
-                          : '—'}
-                  </h2>
-                  <p className="text-xs text-zinc-500 font-mono mb-3">{wallet.tokenLine || '—'}</p>
+                  {isInitialDataLoading ? (
+                    <>
+                      <SkeletonBlock className="w-44 h-9 mb-3 rounded-xl" />
+                      <SkeletonBlock className="w-36 h-3 mb-4 rounded-md" />
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="text-[32px] font-bold font-mono tracking-tight mb-1 text-neon">
+                        {wallet.name === 'Nodius Wallet'
+                          ? `$${totalUsdBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : wallet.usdValue
+                            ? `$${parseFloat(wallet.usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : wallet.balance !== '—'
+                              ? `${parseFloat(wallet.balance).toFixed(4)}`
+                              : '—'}
+                      </h2>
+                      <p className="text-xs text-zinc-500 font-mono mb-3">{wallet.tokenLine || '—'}</p>
+                    </>
+                  )}
                   {wallet.address && (
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-zinc-500 font-mono bg-surfaceLight/50 px-2 py-1 rounded-md">{wallet.address}</p>
@@ -242,30 +301,39 @@ export default function HomePage() {
 
       <div className="px-5 mb-8">
         <div className="grid grid-cols-4 gap-2">
-          <button onClick={() => navigate('/swap')} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
-            <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
-              <ArrowLeftRight size={18} />
+          {isInitialDataLoading ? [0, 1, 2, 3].map((item) => (
+            <div key={item} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
+              <SkeletonBlock className="w-10 h-10" />
+              <SkeletonBlock className="w-11 h-3 rounded-md" />
             </div>
-            <span className="text-[11px] font-semibold">Swap</span>
-          </button>
-          <button onClick={() => navigate('/bridge')} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
-            <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
-              <GitMerge size={18} />
-            </div>
-            <span className="text-[11px] font-semibold">Bridge</span>
-          </button>
-          <button onClick={() => navigate('/transfer')} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
-            <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
-              <Upload size={18} />
-            </div>
-            <span className="text-[11px] font-semibold">Transfer</span>
-          </button>
-          <button onClick={() => wallets[0] && setQrWallet(wallets[0])} disabled={wallets.length === 0} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
-            <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
-              <ArrowDownToLine size={18} />
-            </div>
-            <span className="text-[11px] font-semibold">Receive</span>
-          </button>
+          )) : (
+            <>
+              <button onClick={() => navigate('/swap')} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
+                <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
+                  <ArrowLeftRight size={18} />
+                </div>
+                <span className="text-[11px] font-semibold">Swap</span>
+              </button>
+              <button onClick={() => navigate('/bridge')} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
+                <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
+                  <GitMerge size={18} />
+                </div>
+                <span className="text-[11px] font-semibold">Bridge</span>
+              </button>
+              <button onClick={() => navigate('/transfer')} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
+                <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
+                  <Upload size={18} />
+                </div>
+                <span className="text-[11px] font-semibold">Transfer</span>
+              </button>
+              <button onClick={() => wallets[0] && setQrWallet(wallets[0])} disabled={wallets.length === 0} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
+                <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
+                  <ArrowDownToLine size={18} />
+                </div>
+                <span className="text-[11px] font-semibold">Receive</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -274,42 +342,56 @@ export default function HomePage() {
           <Coins size={16} className="text-neon" />
           Asset
         </h3>
-        {ownedTokens.length > 0 ? (
-          <div className="flex flex-col gap-6">
-            {Object.values(chainGroups).map((group) => (
-              <div key={group.name}>
-                <div className="flex items-center gap-2 mb-3">
-                  <img src={group.icon} alt={group.name} className="w-5 h-5 rounded-full" />
-                  <h4 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">{group.name}</h4>
+        {isLoadingAssets ? (
+          <div className="flex flex-col gap-2">
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item} className="flex items-center justify-between bg-surface/50 p-3.5 rounded-[18px] border border-surfaceLight">
+                <div className="flex items-center gap-3.5">
+                  <div className="relative shrink-0">
+                    <SkeletonBlock className="w-8 h-8" />
+                    <SkeletonBlock className="absolute -bottom-1 -right-1 w-4 h-4 border-2 border-surface" />
+                  </div>
+                  <div>
+                    <SkeletonBlock className="w-14 h-4 mb-2 rounded-md" />
+                    <SkeletonBlock className="w-20 h-3 rounded-md" />
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  {group.tokens.map((token) => (
-                    <div key={token.symbol} className="flex items-center justify-between bg-surface/50 p-3.5 rounded-[18px] border border-surfaceLight">
-                      <div className="flex items-center gap-3.5">
-                        <img src={token.icon} alt={token.symbol} className="w-8 h-8 rounded-full" />
-                        <div>
-                          <h4 className="font-bold text-[15px]">{token.symbol}</h4>
-                          <p className="text-[11px] text-zinc-500 font-medium">{parseFloat(token.balance).toFixed(4)}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <h4 className="font-bold text-[15px] font-mono">
-                          {token.usdValue != null
-                            ? `$${parseFloat(token.usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                            : '—'}
-                        </h4>
-                        {token.change24h != null && (
-                          <div className={`flex items-center justify-end gap-1 mt-0.5 ${token.change24h >= 0 ? 'text-neon' : 'text-red-500'}`}>
-                            {token.change24h >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                            <p className="text-xs font-semibold">{token.change24h >= 0 ? '+' : ''}{token.change24h.toFixed(2)}%</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex flex-col items-end">
+                  <SkeletonBlock className="w-20 h-4 mb-2 rounded-md" />
+                  <SkeletonBlock className="w-12 h-3 rounded-md" />
                 </div>
               </div>
             ))}
+          </div>
+        ) : ownedTokens.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {Object.values(chainGroups).flatMap((group) => group.tokens.map((token) => (
+              <div key={`${token.chainName}-${token.symbol}`} className="flex items-center justify-between bg-surface/50 p-3.5 rounded-[18px] border border-surfaceLight">
+                <div className="flex items-center gap-3.5">
+                  <div className="relative shrink-0">
+                    <img src={token.icon} alt={token.symbol} className="w-8 h-8 rounded-full" />
+                    <img src={token.chainIcon} alt={token.chainName} className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-surface bg-darkbg" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-[15px]">{token.symbol}</h4>
+                    <p className="text-[11px] text-zinc-500 font-medium">{parseFloat(token.balance).toFixed(4)}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <h4 className="font-bold text-[15px] font-mono">
+                    {token.usdValue != null
+                      ? `$${parseFloat(token.usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : '—'}
+                  </h4>
+                  {token.change24h != null && (
+                    <div className={`flex items-center justify-end gap-1 mt-0.5 ${token.change24h >= 0 ? 'text-neon' : 'text-red-500'}`}>
+                      {token.change24h >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                      <p className="text-xs font-semibold">{token.change24h >= 0 ? '+' : ''}{token.change24h.toFixed(2)}%</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )))}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
@@ -332,34 +414,55 @@ export default function HomePage() {
               </button>
             </div>
             <div className="flex flex-col items-center gap-4">
-              <div className="relative">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrWallet.copyAddress)}`}
-                  alt="QR Code"
-                  className="w-56 h-56"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-10 h-10 rounded-full bg-white p-1 shadow-lg">
-                    <img src={qrWallet.icon} alt={qrWallet.name} className="w-full h-full rounded-full" />
+              {isInitialDataLoading ? (
+                <>
+                  <SkeletonBlock className="w-56 h-56 rounded-xl" />
+                  <SkeletonBlock className="w-24 h-3 rounded-md" />
+                  <SkeletonBlock className="w-full h-9 rounded-lg" />
+                  <SkeletonBlock className="w-52 h-3 rounded-md" />
+                </>
+              ) : (
+                <>
+                  <div className="relative">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrWallet.copyAddress)}`}
+                      alt="QR Code"
+                      className="w-56 h-56"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-10 h-10 rounded-full bg-white p-1 shadow-lg">
+                        <img src={qrWallet.icon} alt={qrWallet.name} className="w-full h-full rounded-full" />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{qrWallet.name}</p>
-              <p className="text-xs text-zinc-500 font-mono bg-darkbg border border-surfaceLight px-3 py-1.5 rounded-lg break-all text-center max-w-full">
-                {qrWallet.copyAddress}
-              </p>
-              <button
-                onClick={() => {
-                  const a = document.createElement('a')
-                  a.href = `https://api.qrserver.com/v1/create-qr-code/?size=560x560&data=${encodeURIComponent(qrWallet.copyAddress)}`
-                  a.download = `nodius-${qrWallet.name.toLowerCase()}-address.png`
-                  a.click()
-                }}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-neon text-darkbg text-sm font-bold rounded-xl hover:bg-emerald-400 transition-colors"
-              >
-                <Download size={16} />
-                Save QR Code
-              </button>
+                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{qrWallet.name}</p>
+                  <p className="text-xs text-zinc-500 font-mono bg-darkbg border border-surfaceLight px-3 py-1.5 rounded-lg break-all text-center max-w-full">
+                    {qrWallet.copyAddress}
+                  </p>
+                  <p className="w-full text-[11px] italic leading-relaxed text-zinc-500 text-center">
+                    Note: {getReceiveNote(qrWallet)}
+                  </p>
+                </>
+              )}
+              {isInitialDataLoading ? (
+                <SkeletonBlock className="w-full h-11 rounded-xl" />
+              ) : (
+                <button
+                  onClick={() => {
+                    setQrSaving(true)
+                    const a = document.createElement('a')
+                    a.href = `https://api.qrserver.com/v1/create-qr-code/?size=560x560&data=${encodeURIComponent(qrWallet.copyAddress)}`
+                    a.download = `nodius-${qrWallet.name.toLowerCase()}-address.png`
+                    a.click()
+                    window.setTimeout(() => setQrSaving(false), 800)
+                  }}
+                  disabled={qrSaving}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-neon text-darkbg text-sm font-bold rounded-xl hover:bg-emerald-400 transition-colors disabled:opacity-70 disabled:cursor-wait"
+                >
+                  {qrSaving ? <LoaderCircle size={16} className="animate-spin" /> : <Download size={16} />}
+                  {qrSaving ? 'Saving...' : 'Save QR Code'}
+                </button>
+              )}
             </div>
           </div>
         </div>

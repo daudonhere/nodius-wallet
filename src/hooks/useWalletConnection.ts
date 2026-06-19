@@ -10,8 +10,15 @@ export function useWalletConnection() {
   const [tonUI] = useTonConnectUI()
   const tonAddress = useTonAddress()
 
-  const evmWallet = evmWallets[0]
-  const solanaWallet = solanaWallets[0]
+  const getWalletClientType = (wallet: unknown) => typeof wallet === 'object' && wallet !== null && 'walletClientType' in wallet ? String(wallet.walletClientType) : ''
+  const isPrivyWallet = (wallet: unknown) => getWalletClientType(wallet) === 'privy'
+
+  const privyEvmWallet = evmWallets.find(isPrivyWallet)
+  const externalEvmWallet = evmWallets.find((wallet) => !isPrivyWallet(wallet))
+  const evmWallet = externalEvmWallet || privyEvmWallet
+  const privySolanaWallet = solanaWallets.find(isPrivyWallet)
+  const externalSolanaWallet = solanaWallets.find((wallet) => !isPrivyWallet(wallet))
+  const solanaWallet = externalSolanaWallet || privySolanaWallet
 
   const parseChainId = (caip2?: string): number | undefined => {
     if (!caip2) return undefined
@@ -26,17 +33,31 @@ export function useWalletConnection() {
     login,
     logout,
     connectWallet,
+    privy: {
+      evmAddress: privyEvmWallet?.address,
+      solanaAddress: privySolanaWallet?.address,
+      primaryAddress: privyEvmWallet?.address || privySolanaWallet?.address,
+      connected: !!privyEvmWallet || !!privySolanaWallet,
+      evmWallet: privyEvmWallet,
+      solanaWallet: privySolanaWallet,
+    },
     evm: {
       address: evmWallet?.address,
+      externalAddress: externalEvmWallet?.address,
       connected: !!evmWallet,
+      externalConnected: !!externalEvmWallet,
       chainId: parseChainId(evmWallet?.chainId),
       wallet: evmWallet,
+      externalWallet: externalEvmWallet,
       disconnect: logout,
     },
     solana: {
       address: solanaWallet?.address,
+      externalAddress: externalSolanaWallet?.address,
       connected: !!solanaWallet,
+      externalConnected: !!externalSolanaWallet,
       wallet: solanaWallet,
+      externalWallet: externalSolanaWallet,
       disconnect: logout,
       signAndSend: solanaWallet?.signAndSendTransaction.bind(solanaWallet),
     },

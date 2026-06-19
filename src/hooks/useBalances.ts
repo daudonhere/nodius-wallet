@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatUnits } from 'viem'
 import { useTonAddress } from '@tonconnect/ui-react'
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js'
@@ -31,6 +31,8 @@ interface BalanceEntry {
   icon?: string
   chainName?: string
   chainId?: number
+  address?: string
+  decimals?: number
 }
 
 async function alchemyRpc(network: string, method: string, params: any[]) {
@@ -53,7 +55,7 @@ async function fetchEvmAssets(address: string): Promise<BalanceEntry[]> {
     if (native) {
       const balance = formatUnits(BigInt(native), 18)
       if (Number(balance) > 0) {
-        assets.push({ symbol: chain.native, balance, usdValue: balance, icon: chain.icon, chainName: chain.name, chainId: chain.id })
+        assets.push({ symbol: chain.native, balance, usdValue: balance, icon: chain.icon, chainName: chain.name, chainId: chain.id, address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', decimals: 18 })
       }
     }
 
@@ -73,6 +75,8 @@ async function fetchEvmAssets(address: string): Promise<BalanceEntry[]> {
         icon: meta?.logo || chain.icon,
         chainName: chain.name,
         chainId: chain.id,
+        address: token.contractAddress,
+        decimals,
       })
     }
   }
@@ -86,7 +90,7 @@ async function fetchSolanaAssets(address: string): Promise<BalanceEntry[]> {
   try {
     const lamports = await solanaConnection.getBalance(new PublicKey(address))
     const sol = (lamports / LAMPORTS_PER_SOL).toString()
-    if (Number(sol) > 0) assets.push({ symbol: 'SOL', balance: sol, usdValue: sol, icon: 'https://cryptologos.cc/logos/solana-sol-logo.svg', chainName: 'Solana' })
+    if (Number(sol) > 0) assets.push({ symbol: 'SOL', balance: sol, usdValue: sol, icon: 'https://cryptologos.cc/logos/solana-sol-logo.svg', chainName: 'Solana', address: 'So11111111111111111111111111111111111111112', decimals: 9 })
   } catch {}
 
   if (!HELIUS_KEY) return assets
@@ -112,6 +116,8 @@ async function fetchSolanaAssets(address: string): Promise<BalanceEntry[]> {
         usdValue: balance,
         icon: item.content?.links?.image || 'https://cryptologos.cc/logos/solana-sol-logo.svg',
         chainName: 'Solana',
+        address: item.id,
+        decimals,
       })
     }
   } catch {}
@@ -158,19 +164,29 @@ export function useBalances() {
   const tonAddress = useTonAddress()
   const [tokens, setTokens] = useState<BalanceEntry[]>([])
   const [prices, setPrices] = useState<Record<string, { price: number; change24h: number }>>({})
+  const [isLoadingAssets, setIsLoadingAssets] = useState(true)
+  const [isLoadingPrices, setIsLoadingPrices] = useState(true)
+  const assetsLoaded = useRef(false)
+  const pricesLoaded = useRef(false)
 
   const SYMBOLS = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'AVAX', 'LINK', 'MATIC', 'ARB', 'DOGE', 'TON', 'UNI', 'USDC', 'USDT']
 
   useEffect(() => {
     let cancelled = false
+    assetsLoaded.current = false
 
     async function fetchAssets() {
+      if (!assetsLoaded.current) setIsLoadingAssets(true)
       const results = await Promise.all([
         evm.address ? fetchEvmAssets(evm.address) : Promise.resolve([]),
         solana.address ? fetchSolanaAssets(solana.address) : Promise.resolve([]),
         tonAddress ? fetchTonAssets(tonAddress) : Promise.resolve([]),
       ])
-      if (!cancelled) setTokens(results.flat().filter((t) => Number(t.balance) > 0))
+      if (!cancelled) {
+        setTokens(results.flat().filter((t) => Number(t.balance) > 0))
+        assetsLoaded.current = true
+        setIsLoadingAssets(false)
+      }
     }
 
     fetchAssets()
@@ -183,8 +199,11 @@ export function useBalances() {
 
   useEffect(() => {
     const fetchAndCheck = async () => {
+      if (!pricesLoaded.current) setIsLoadingPrices(true)
       const data = await fetchPrices(SYMBOLS)
       setPrices(data)
+      pricesLoaded.current = true
+      setIsLoadingPrices(false)
 
       if (!useSettingsStore.getState().pushNotifications) return
 
@@ -220,5 +239,5 @@ export function useBalances() {
     }
   })
 
-  return { tokens, trending, prices, isConnected: evm.connected || solana.connected || !!tonAddress }
+  return { tokens, trending, prices, isLoading: isLoadingAssets || isLoadingPrices, isLoadingAssets, isLoadingPrices, isConnected: evm.connected || solana.connected || !!tonAddress }
 }
