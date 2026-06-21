@@ -14,7 +14,7 @@ import {
 import { getRelayContractAddress, getRelayerAddress, getRelayerBalance } from './relayContract'
 import { getSponsoredRelayerInfo } from './sponsoredRelayers'
 import { buildSponsoredSolanaSwap } from './solanaSponsor'
-import { buildExternalMessageBoc, sendTonExternalMessage } from './tonSponsor'
+import { buildSignedExecuteBody, sendTonExternalMessage } from './tonSponsor'
 import { initDb } from './db/index'
 import { startWorker } from './worker'
 
@@ -88,14 +88,14 @@ app.post('/relay/sponsored-solana-swap', async (c) => {
 })
 
 app.post('/relay/sponsored-ton-swap', async (c) => {
-  const { walletAddress, target, value, seqno, signatureBase64 } = await c.req.json()
-  if (!walletAddress || !target || value == null || seqno == null || !signatureBase64) {
-    return c.json({ error: 'Missing required fields: walletAddress, target, value, seqno, signatureBase64' }, 400)
+  const { walletAddress, target, value, payloadBase64, seqno, signatureBase64 } = await c.req.json()
+  if (!walletAddress || !target || value == null || !payloadBase64 || seqno == null || !signatureBase64) {
+    return c.json({ error: 'Missing required fields: walletAddress, target, value, payloadBase64, seqno, signatureBase64' }, 400)
   }
 
   try {
-    const bocBase64 = buildExternalMessageBoc(walletAddress, target, value, seqno, signatureBase64)
-    const txHash = await sendTonExternalMessage(bocBase64)
+    const bodyCell = buildSignedExecuteBody(target, value, payloadBase64, seqno, signatureBase64)
+    const txHash = await sendTonExternalMessage(walletAddress, bodyCell)
     return c.json({ txHash })
   } catch (err: any) {
     return c.json({ error: err.message || 'Sponsored TON swap failed' }, 500)

@@ -179,11 +179,13 @@ export function useBalances() {
 
     async function fetchAssets() {
       if (!assetsLoaded.current) setIsLoadingAssets(true)
+      console.log('[useBalances] fetching with addresses:', { evm: evm.address, solana: solana.address, ton: tonAddress })
       const results = await Promise.all([
         evm.address ? fetchEvmAssets(evm.address) : Promise.resolve([]),
         solana.address ? fetchSolanaAssets(solana.address) : Promise.resolve([]),
         tonAddress ? fetchTonAssets(tonAddress) : Promise.resolve([]),
       ])
+      console.log('[useBalances] fetch results length:', results.map(r => r.length))
       if (!cancelled) {
         setTokens(results.flat().filter((t) => Number(t.balance) > 0))
         assetsLoaded.current = true

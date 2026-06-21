@@ -113,6 +113,7 @@ export async function submitSponsoredTonSwap(params: {
   walletAddress: string
   target: string
   value: string
+  payloadBase64: string
   seqno: number
   signatureBase64: string
 }) {

@@ -26,8 +26,8 @@ contract TonGaslessWallet with Deployable {
             .endCell();
 
         let hash: Int = verifyMsg.hash();
-        require(checkSignature(hash, msg.signature, self.owner), 100);
-        require(msg.seqno == self.seqno, 101);
+        require(checkSignature(hash, msg.signature.beginParse(), self.owner), "invalid signature");
+        require(msg.seqno == self.seqno, "invalid seqno");
 
         self.seqno += 1;
 
@@ -40,7 +40,7 @@ contract TonGaslessWallet with Deployable {
     }
 
     receive() {
-        let sender: Address = context().sender;
+        // Accept incoming TON for funding wallet contract balance
     }
 
     get fun owner(): Int {

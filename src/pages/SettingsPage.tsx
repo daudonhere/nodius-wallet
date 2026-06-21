@@ -225,6 +225,23 @@ export default function SettingsPage() {
               ))}
             </div>
           </div>
+          <div className="py-4 border-t border-surfaceLight/50">
+            <div className="flex items-center gap-3.5 mb-3">
+              <div className="w-9 h-9 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-300">
+                <div className="text-[10px] font-bold">TON</div>
+              </div>
+              <div>
+                <span className="text-sm font-semibold block">TonGaslessWallet</span>
+                <span className="text-[11px] text-zinc-500">Contract address for sponsored TON swaps</span>
+              </div>
+            </div>
+            <input
+              value={s.tonWalletContractAddr}
+              onChange={(e) => s.setTonWalletContractAddr(e.target.value)}
+              placeholder="EQD..."
+              className="w-full bg-darkbg border border-surfaceLight rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-neon/50 transition-colors"
+            />
+          </div>
         </div>
       </div>
 

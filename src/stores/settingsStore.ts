@@ -14,6 +14,7 @@ interface SettingsState extends AppSettings {
   setGasSpeed: (v: GasSpeed) => void
   setBiometricUnlock: (v: boolean) => void
   setPushNotifications: (v: boolean) => void
+  setTonWalletContractAddr: (v: string) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -27,6 +28,7 @@ export const useSettingsStore = create<SettingsState>()(
       gasSpeed: 'normal',
       biometricUnlock: false,
       pushNotifications: false,
+      tonWalletContractAddr: '',
       setMainChain: (v) => set({ mainChain: v }),
       setDarkMode: (v) => set({ darkMode: v }),
       setLocalCurrency: (v) => set({ localCurrency: v }),
@@ -35,6 +37,7 @@ export const useSettingsStore = create<SettingsState>()(
       setGasSpeed: (v) => set({ gasSpeed: v }),
       setBiometricUnlock: (v) => set({ biometricUnlock: v }),
       setPushNotifications: (v) => set({ pushNotifications: v }),
+      setTonWalletContractAddr: (v) => set({ tonWalletContractAddr: v }),
     }),
     { name: 'nodius-settings' }
   )

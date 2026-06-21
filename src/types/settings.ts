@@ -9,4 +9,5 @@ export interface AppSettings {
   gasSpeed: GasSpeed
   biometricUnlock: boolean
   pushNotifications: boolean
+  tonWalletContractAddr: string
 }

@@ -11,9 +11,12 @@ import { useWalletConnection } from '../hooks/useWalletConnection'
 import BottomNavigation from '../components/BottomNavigation'
 import NeonButton from '../components/NeonButton'
 import { getJupiterQuote, getJupiterSwapTransaction, getJupiterTokens, getLifiQuote, getLifiTokens, getStonfiQuote, getStonfiSwapTransaction, getStonfiTokens, getZeroXQuote } from '../services/swap'
-import { getSponsoredRelayInfo, getSponsoredSolanaSwap, submitRelayTx } from '../services/relay'
+import { getSponsoredRelayInfo, getSponsoredSolanaSwap, submitRelayTx, submitSponsoredTonSwap } from '../services/relay'
 import { useBalances } from '../hooks/useBalances'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useTonGasless } from '../hooks/useTonGasless'
+import { signSwapMessage } from '../services/tonGasless'
+import { POPULAR_TOKEN_SYMBOLS } from '../config/tokens'
 import type { SwapQuote } from '../services/swap'
 
 const CHAIN_ICONS: Record<string, string> = {
@@ -38,8 +41,6 @@ const CHAIN_IDS: Record<string, number> = {
   Polygon: 137,
   Arbitrum: 42161,
 }
-
-const POPULAR_TOKEN_SYMBOLS = new Set(['ETH', 'WETH', 'USDC', 'USDT', 'DAI', 'WBTC', 'LINK', 'UNI', 'AAVE', 'MATIC', 'POL', 'ARB', 'SOL', 'JUP', 'JTO', 'BONK', 'WIF', 'PYTH', 'RAY', 'ORCA'])
 
 const VIEM_CHAINS = {
   Ethereum: mainnet,
@@ -85,7 +86,11 @@ export default function SwapPage() {
   const [tonUI] = useTonConnectUI()
   const { tokens, prices, isLoadingAssets } = useBalances()
   const gasFeeRouting = useSettingsStore((s) => s.gasFeeRouting)
+  const tonWalletContractAddr = useSettingsStore((s) => s.tonWalletContractAddr)
+  const setTonWalletContractAddr = useSettingsStore((s) => s.setTonWalletContractAddr)
+  const tonGasless = useTonGasless()
 
+  const [tonSeqno, setTonSeqno] = useState(() => Number(localStorage.getItem('nodius_ton_seqno') || '0'))
   const [fromToken, setFromToken] = useState<SwapToken>(EMPTY_TOKEN)
   const [toToken, setToToken] = useState<SwapToken>(EMPTY_TOKEN)
   const [fromAmount, setFromAmount] = useState('0')
@@ -270,15 +275,52 @@ export default function SwapPage() {
       setError('')
       try {
         const txParams = await getStonfiSwapTransaction(quote.raw, tonAddress)
-        await tonUI.sendTransaction({
-          validUntil: Math.floor(Date.now() / 1000) + 600,
-          messages: [{
-            address: txParams.to.toString(),
-            amount: txParams.value.toString(),
-            payload: txParams.body?.toBoc().toString('base64'),
-          }],
-        })
-        setTxHash('TON transaction submitted')
+        if (!txParams.body) {
+          setError('STON.fi swap body missing')
+          setSending(false)
+          return
+        }
+
+        if (gasFreeAvailable) {
+          if (!tonGasless.hasKey) {
+            tonGasless.createKeypair()
+          }
+          if (!tonWalletContractAddr) {
+            const addr = prompt('Enter TonGaslessWallet contract address:')
+            if (addr) setTonWalletContractAddr(addr.trim())
+            else {
+              setSending(false)
+              return
+            }
+          }
+          const kp = tonGasless.keypair!
+          const payloadBase64 = txParams.body?.toBoc().toString('base64') || ''
+          const signatureBase64 = signSwapMessage(kp.secretKey, txParams.to.toString(), txParams.value.toString(), txParams.body!, tonSeqno)
+
+          await submitSponsoredTonSwap({
+            walletAddress: tonWalletContractAddr,
+            target: txParams.to.toString(),
+            value: txParams.value.toString(),
+            payloadBase64,
+            seqno: tonSeqno,
+            signatureBase64,
+          })
+
+          const nextSeqno = tonSeqno + 1
+          setTonSeqno(nextSeqno)
+          localStorage.setItem('nodius_ton_seqno', String(nextSeqno))
+          setTxHash('TON sponsored swap submitted')
+        } else {
+          await tonUI.sendTransaction({
+            validUntil: Math.floor(Date.now() / 1000) + 600,
+            messages: [{
+              address: txParams.to.toString(),
+              amount: txParams.value.toString(),
+              payload: txParams.body?.toBoc().toString('base64'),
+            }],
+          })
+          setTxHash('TON transaction submitted')
+        }
       } catch {
         setError('STON.fi swap rejected or failed')
       }
@@ -436,6 +478,57 @@ export default function SwapPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto hide-scrollbar pb-32 z-10 px-5">
+        {isInitialSwapLoading ? (
+          <div className="flex flex-col gap-5 mt-2">
+            <div className="bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
+              <div className="bg-[#0a0a0a] rounded-[24px] p-5 pb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <SkeletonBlock className="w-14 h-4 rounded-md" />
+                  <SkeletonBlock className="w-20 h-4 rounded-md" />
+                </div>
+                <div className="flex justify-between items-center">
+                  <SkeletonBlock className="w-28 h-9 rounded-xl" />
+                  <SkeletonBlock className="w-24 h-11 rounded-full" />
+                </div>
+                <div className="mt-2"><SkeletonBlock className="w-20 h-4 rounded-md" /></div>
+              </div>
+              <div className="flex justify-center -my-[16px] relative z-10">
+                <div className="w-11 h-11 bg-surface border-[4px] border-[#161616] rounded-full flex items-center justify-center">
+                  <SkeletonBlock className="w-5 h-5" />
+                </div>
+              </div>
+              <div className="bg-[#0a0a0a] rounded-[24px] p-5 pb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <SkeletonBlock className="w-20 h-4 rounded-md" />
+                </div>
+                <div className="flex justify-between items-center">
+                  <SkeletonBlock className="w-28 h-9 rounded-xl" />
+                  <SkeletonBlock className="w-24 h-11 rounded-full" />
+                </div>
+                <div className="mt-2"><SkeletonBlock className="w-20 h-4 rounded-md" /></div>
+              </div>
+            </div>
+            <div className="px-1">
+              <div className="flex justify-between items-center mb-3">
+                <SkeletonBlock className="w-24 h-4 rounded-md" />
+                <SkeletonBlock className="w-10 h-4 rounded-md" />
+              </div>
+              <div className="flex gap-2.5">
+                {[0, 1, 2, 3].map((i) => (
+                  <SkeletonBlock key={i} className="flex-1 h-10 rounded-[14px]" />
+                ))}
+              </div>
+            </div>
+            <div className="bg-surface/60 border border-surfaceLight rounded-[20px] p-4">
+              <div className="flex justify-between items-center mb-3"><SkeletonBlock className="w-20 h-4 rounded-md" /><SkeletonBlock className="w-32 h-4 rounded-md" /></div>
+              <div className="flex justify-between items-center mb-3"><SkeletonBlock className="w-16 h-4 rounded-md" /><SkeletonBlock className="w-20 h-4 rounded-md" /></div>
+              <div className="flex justify-between items-center mb-3"><SkeletonBlock className="w-16 h-4 rounded-md" /><div className="flex gap-1.5"><SkeletonBlock className="w-12 h-6 rounded-lg" /><SkeletonBlock className="w-12 h-6 rounded-lg" /></div></div>
+              <div className="flex justify-between items-center"><SkeletonBlock className="w-12 h-4 rounded-md" /><SkeletonBlock className="w-28 h-4 rounded-md" /></div>
+            </div>
+            <SkeletonBlock className="w-full h-12 rounded-xl" />
+          </div>
+        ) : (
+        <>
         <div className="mt-2 bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
           <div className="bg-[#0a0a0a] rounded-[24px] p-5 pb-6 border border-transparent focus-within:border-neon/30 transition-colors group">
             <div className="flex justify-between items-center mb-4 text-sm">
@@ -592,6 +685,8 @@ export default function SwapPage() {
             : quote ? 'Execute Swap'
             : 'Get Quote'}
         </NeonButton>
+        </>
+      )}
       </main>
 
       {tokenPicker && (

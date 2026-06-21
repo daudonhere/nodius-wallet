@@ -1,0 +1,320 @@
+// automatically generated from `@stdlib/std/stdlib.fc` `/home/daudsmith/Documents/github/nodius-wallet/ton-contracts/build/TonGaslessWallet_TonGaslessWallet.fc` 
+PROGRAM{
+  DECLPROC __tact_context_get
+  DECLPROC __tact_context_get_sender
+  DECLPROC $DeployOk$_store
+  DECLPROC $DeployOk$_store_cell
+  DECLPROC $TonGaslessWallet$_store
+  DECLPROC $TonGaslessWallet$_load
+  DECLPROC $Context$_get_value
+  DECLPROC $TonGaslessWallet$init$_load
+  DECLPROC $TonGaslessWallet$_contract_init
+  DECLPROC $TonGaslessWallet$_contract_load
+  DECLPROC $TonGaslessWallet$_contract_store
+  DECLPROC $TonGaslessWallet$_fun_owner
+  DECLPROC $TonGaslessWallet$_fun_seqno
+  DECLPROC $MessageParameters$_constructor_bounce_to_value_mode_body
+  DECLPROC $TonGaslessWallet$_fun_notify
+  DECLPROC $DeployOk$_constructor_queryId
+  DECLPROC $SendParameters$_constructor_to_value_body_mode
+  83229 DECLMETHOD %owner
+  85143 DECLMETHOD %seqno
+  DECLPROC recv_internal
+  DECLPROC recv_external
+  DECLGLOBVAR __tact_context
+  DECLGLOBVAR __tact_context_sender
+  DECLGLOBVAR __tact_child_contract_codes
+  DECLGLOBVAR __tact_randomized
+  __tact_context_get PROCINLINE:<{
+    __tact_context GETGLOB
+    4 UNTUPLE
+  }>
+  __tact_context_get_sender PROCINLINE:<{
+    __tact_context_sender GETGLOB
+  }>
+  $DeployOk$_store PROCINLINE:<{
+    2952335191 PUSHINT
+    ROT
+    32 STU
+    64 STU
+  }>
+  $DeployOk$_store_cell PROCINLINE:<{
+    SWAP
+    $DeployOk$_store INLINECALLDICT
+    ENDC
+  }>
+  $TonGaslessWallet$_store PROCINLINE:<{
+    s0 s2 XCHG
+    256 STU
+    32 STU
+  }>
+  $TonGaslessWallet$_load PROCINLINE:<{
+    256 LDU
+    32 LDU
+    -ROT
+  }>
+  $Context$_get_value PROCINLINE:<{
+    s1 s3 XCHG
+    3 BLKDROP
+  }>
+  $TonGaslessWallet$init$_load PROCINLINE:<{
+    257 PUSHINT
+    LDIX
+    SWAP
+  }>
+  $TonGaslessWallet$_contract_init PROCINLINE:<{
+    0 PUSHINT
+  }>
+  $TonGaslessWallet$_contract_load PROCINLINE:<{
+    c4 PUSH
+    CTOS
+    1 LDI
+    SWAP
+    IF:<{
+      $TonGaslessWallet$_load INLINECALLDICT
+      1 2 BLKDROP2
+    }>ELSE<{
+      $TonGaslessWallet$init$_load INLINECALLDICT
+      SWAP
+      ENDS
+      $TonGaslessWallet$_contract_init INLINECALLDICT
+    }>
+  }>
+  $TonGaslessWallet$_contract_store PROCINLINE:<{
+    NEWC
+    TRUE
+    SWAP
+    1 STI
+    -ROT
+    $TonGaslessWallet$_store INLINECALLDICT
+    ENDC
+    c4 POP
+  }>
+  $TonGaslessWallet$_fun_owner PROCREF:<{
+    OVER
+  }>
+  $TonGaslessWallet$_fun_seqno PROCREF:<{
+    DUP
+  }>
+  $MessageParameters$_constructor_bounce_to_value_mode_body PROCINLINE:<{
+    s3 s3 XCHG2
+    s0 s4 XCHG
+  }>
+  $TonGaslessWallet$_fun_notify PROCINLINE:<{
+    __tact_context_get_sender INLINECALLDICT
+    FALSE
+    0 PUSHINT
+    s0 s3 XCHG2
+    66 PUSHINT
+    SWAP
+    $MessageParameters$_constructor_bounce_to_value_mode_body INLINECALLDICT
+        NEWC
+        b{01} STSLICECONST  // store tag = $0 and ihr_disabled = true
+        1 STI               // store `bounce`
+        b{000} STSLICECONST // store bounced = false and src = addr_none
+        STSLICE             // store `to`
+        SWAP
+        STGRAMS             // store `value`
+        106 PUSHINT         // 1 + 4 + 4 + 64 + 32 + 1
+        STZEROES
+        // → Stack state
+        // s0: Builder
+        // s1: `body`
+        // s2: `mode`
+        STDICT
+        ENDC
+        SWAP
+        SENDRAWMSG
+  }>
+  $DeployOk$_constructor_queryId PROCINLINE:<{
+  }>
+  $SendParameters$_constructor_to_value_body_mode PROCINLINE:<{
+    PUSHNULL
+    s4 s2 XCHG2
+    PUSHNULL
+    s4 s2 XCHG2
+    TRUE
+  }>
+  %owner PROC:<{
+    $TonGaslessWallet$_contract_load INLINECALLDICT
+    $TonGaslessWallet$_fun_owner INLINECALLDICT
+    2 1 BLKDROP2
+  }>
+  %seqno PROC:<{
+    $TonGaslessWallet$_contract_load INLINECALLDICT
+    $TonGaslessWallet$_fun_seqno INLINECALLDICT
+    2 1 BLKDROP2
+  }>
+  recv_internal PROC:<{
+    SWAP
+    CTOS
+    2 PUSHINT
+    SDSKIPFIRST
+    1 LDI
+    1 LDI
+    LDMSGADDR
+    OVER
+    s3 s4 XCHG
+    s6 s6 XCHG2
+    4 TUPLE
+    __tact_context SETGLOB
+    s0 s2 XCHG
+    __tact_context_sender SETGLOB
+    $TonGaslessWallet$_contract_load INLINECALLDICT
+    s0 s3 XCHG
+    IFJMP:<{
+      3 BLKDROP
+    }>
+    0 PUSHINT
+    s2 PUSH
+    SBITS
+    DUP
+    31 GTINT
+    IF:<{
+      NIP
+      s0 s2 XCHG
+      32 LDU
+      s0 s3 XCHG
+    }>
+    OVER
+    2490013878 PUSHINT
+    EQUAL
+    IFJMP:<{
+      2DROP
+      SWAP
+      64 LDU
+      DROP
+      $DeployOk$_constructor_queryId INLINECALLDICT
+      NEWC
+      $DeployOk$_store_cell INLINECALLDICT
+      s1 s2 XCHG
+      $TonGaslessWallet$_fun_notify INLINECALLDICT
+      $TonGaslessWallet$_contract_store INLINECALLDICT
+    }>
+    s3 POP
+    0 EQINT
+    s0 s2 XCHG
+    33 LESSINT
+    s1 s2 XCHG
+    AND
+    IFJMP:<{
+      SWAP
+      $TonGaslessWallet$_contract_store INLINECALLDICT
+    }>
+    2DROP
+    130 THROW
+  }>
+  recv_external PROC:<{
+    $TonGaslessWallet$_contract_load INLINECALLDICT
+    s0 s2 XCHG
+    32 LDUQ 130 THROWIFNOT
+    SWAP
+    381959420 PUSHINT
+    EQUAL
+    IFJMP:<{
+      LDMSGADDR
+      LDVARUINT16
+      LDREF
+      32 LDU
+      LDREF
+      DROP
+          NEWC
+      s5 PUSH
+          STSLICER
+      s4 PUSH
+          STVARUINT16
+      s3 PUSH
+          CTOS
+          STSLICER
+      s2 s(-1) PUXC
+      32 STU
+          ENDC
+          HASHCU
+      57400 PUSHINT
+      s0 s2 XCHG
+          CTOS
+      s7 PUSH
+          CHKSIGNU
+      THROWANYIFNOT
+      32964 PUSHINT
+      s1 s6 XCPU
+      EQUAL
+      THROWANYIFNOT
+      s0 s4 XCHG
+      INC
+      s0 s4 XCHG
+      67 PUSHINT
+      $SendParameters$_constructor_to_value_body_mode INLINECALLDICT
+          NEWC
+          b{01} STSLICECONST  // store tag = $0 and ihr_disabled = true
+          1 STI               // store `bounce`
+          b{000} STSLICECONST // store bounced = false and src = addr_none
+          STSLICE             // store `to`
+          SWAP
+          STGRAMS             // store `value`
+          105 PUSHINT         // 1 + 4 + 4 + 64 + 32
+          STZEROES            // store currency_collection, ihr_fee, fwd_fee, created_lt and created_at
+          // → Stack state
+          // s0: Builder
+          // s1: `data`
+          // s2: `code`
+          // s3: `body`
+          // s4: `mode`
+          // Group 2: Placing the Builder after code and data, then checking those for nullability
+          s2 XCHG0
+          DUP2
+          ISNULL
+          SWAP
+          ISNULL
+          AND
+          // → Stack state
+          // s0: -1 (true) if `data` and `code` are both null, 0 (false) otherwise
+          // s1: `code`
+          // s2: `data`
+          // s3: Builder
+          // s4: `body`
+          // s5: `mode`
+          // Group 3: Left branch of the IFELSE, executed if s0 is -1 (true)
+          <{
+              DROP2 // drop `data` and `code`, since either of those is null
+              b{0} STSLICECONST
+          }> PUSHCONT
+          // Group 3: Right branch of the IFELSE, executed if s0 is 0 (false)
+          <{
+              // _ split_depth:(Maybe (## 5))
+              //   special:(Maybe TickTock)
+              //   code:(Maybe ^Cell)
+              //   data:(Maybe ^Cell)
+              //   library:(Maybe ^Cell)
+              // = StateInit;
+              ROT                // place message Builder on top
+              b{10} STSLICECONST // store Maybe = true, Either = false
+              // Start composing inlined StateInit
+              b{00} STSLICECONST // store split_depth and special first
+              STDICT             // store code
+              STDICT             // store data
+              b{0} STSLICECONST  // store library
+          }> PUSHCONT
+          // Group 3: IFELSE that does the branching shown above
+          IFELSE
+          // → Stack state
+          // s0: Builder
+          // s1: null or StateInit
+          // s2: `body`
+          // s3: `mode`
+          // Group 4: Finalizing the message
+          STDICT // store `body` as ref with an extra Maybe bit, since `body` might be null
+          ENDC
+          // → Stack state
+          // s0: Cell
+          // s1: `mode`
+          // Group 5: Sending the message, with `mode` on top
+          SWAP
+          SENDRAWMSG // https://github.com/tact-lang/tact/issues/1558
+      SWAP
+      $TonGaslessWallet$_contract_store INLINECALLDICT
+    }>
+    3 BLKDROP
+    130 THROW
+  }>
+}END>c

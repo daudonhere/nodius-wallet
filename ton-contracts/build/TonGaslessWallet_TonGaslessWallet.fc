@@ -1,0 +1,435 @@
+#pragma version =0.4.6;
+#pragma allow-post-modification;
+#pragma compute-asm-ltr;
+
+;; TonGaslessWallet_TonGaslessWallet.headers.fc
+;;
+;; Header files for TonGaslessWallet
+;; NOTE: declarations are sorted for optimal order
+;;
+
+;; __tact_context_get
+(int, slice, int, slice) __tact_context_get() inline;
+
+;; __tact_context_get_sender
+slice __tact_context_get_sender() inline;
+
+;; $DeployOk$_store
+builder $DeployOk$_store(builder build_0, (int) v) inline;
+
+;; $DeployOk$_store_cell
+cell $DeployOk$_store_cell((int) v, builder b) inline;
+
+;; $TonGaslessWallet$_store
+builder $TonGaslessWallet$_store(builder build_0, (int, int) v) inline;
+
+;; $TonGaslessWallet$_load
+(slice, ((int, int))) $TonGaslessWallet$_load(slice sc_0) inline;
+
+;; $Context$_get_value
+_ $Context$_get_value((int, slice, int, slice) v) inline;
+
+;; $TonGaslessWallet$init$_load
+(slice, ((int))) $TonGaslessWallet$init$_load(slice sc_0) inline;
+
+;; $TonGaslessWallet$_contract_init
+(int, int) $TonGaslessWallet$_contract_init(int $owner) impure inline;
+
+;; $TonGaslessWallet$_contract_load
+(int, int) $TonGaslessWallet$_contract_load() impure inline;
+
+;; $TonGaslessWallet$_contract_store
+() $TonGaslessWallet$_contract_store((int, int) v) impure inline;
+
+;; $TonGaslessWallet$_fun_owner
+((int, int), int) $TonGaslessWallet$_fun_owner((int, int) $self) impure inline_ref;
+
+;; $TonGaslessWallet$_fun_seqno
+((int, int), int) $TonGaslessWallet$_fun_seqno((int, int) $self) impure inline_ref;
+
+;; $MessageParameters$_constructor_bounce_to_value_mode_body
+((int, cell, int, slice, int)) $MessageParameters$_constructor_bounce_to_value_mode_body(int $bounce, slice $to, int $value, int $mode, cell $body) inline;
+
+;; $TonGaslessWallet$_fun_notify
+((int, int), ()) $TonGaslessWallet$_fun_notify((int, int) $self, cell $body) impure inline;
+
+;; $DeployOk$_constructor_queryId
+((int)) $DeployOk$_constructor_queryId(int $queryId) inline;
+
+;; $SendParameters$_constructor_to_value_body_mode
+((int, cell, cell, cell, int, slice, int)) $SendParameters$_constructor_to_value_body_mode(slice $to, int $value, cell $body, int $mode) inline;
+
+
+;; TonGaslessWallet_TonGaslessWallet.stdlib.fc
+global (int, slice, int, slice) __tact_context;
+global slice __tact_context_sender;
+global cell __tact_child_contract_codes;
+global int __tact_randomized;
+
+(int, slice, int, slice) __tact_context_get() inline {
+    return __tact_context;
+}
+
+slice __tact_context_get_sender() inline {
+    return __tact_context_sender;
+}
+
+builder $global_beginCell() impure asm """
+    NEWC
+""";
+
+int $global_checkSignature(int $hash, slice $signature, int $publicKey) impure asm """
+    CHKSIGNU
+""";
+
+int $global_myBalance() impure asm """
+    BALANCE FIRST
+""";
+
+() $global_nativeReserve(int $amount, int $mode) impure asm """
+    RAWRESERVE
+""";
+
+() $global_message((int, cell, int, slice, int) $params) impure asm """
+    NEWC
+    b{01} STSLICECONST  // store tag = $0 and ihr_disabled = true
+    1 STI               // store `bounce`
+    b{000} STSLICECONST // store bounced = false and src = addr_none
+    STSLICE             // store `to`
+    SWAP
+    STGRAMS             // store `value`
+    106 PUSHINT         // 1 + 4 + 4 + 64 + 32 + 1
+    STZEROES
+    // → Stack state
+    // s0: Builder
+    // s1: `body`
+    // s2: `mode`
+    STDICT
+    ENDC
+    SWAP
+    SENDRAWMSG
+""";
+
+() $global_send((int, cell, cell, cell, int, slice, int) $params) impure asm """
+    NEWC
+    b{01} STSLICECONST  // store tag = $0 and ihr_disabled = true
+    1 STI               // store `bounce`
+    b{000} STSLICECONST // store bounced = false and src = addr_none
+    STSLICE             // store `to`
+    SWAP
+    STGRAMS             // store `value`
+    105 PUSHINT         // 1 + 4 + 4 + 64 + 32
+    STZEROES            // store currency_collection, ihr_fee, fwd_fee, created_lt and created_at
+    // → Stack state
+    // s0: Builder
+    // s1: `data`
+    // s2: `code`
+    // s3: `body`
+    // s4: `mode`
+
+    // Group 2: Placing the Builder after code and data, then checking those for nullability
+    s2 XCHG0
+    DUP2
+    ISNULL
+    SWAP
+    ISNULL
+    AND
+    // → Stack state
+    // s0: -1 (true) if `data` and `code` are both null, 0 (false) otherwise
+    // s1: `code`
+    // s2: `data`
+    // s3: Builder
+    // s4: `body`
+    // s5: `mode`
+
+    // Group 3: Left branch of the IFELSE, executed if s0 is -1 (true)
+    <{
+        DROP2 // drop `data` and `code`, since either of those is null
+        b{0} STSLICECONST
+    }> PUSHCONT
+
+    // Group 3: Right branch of the IFELSE, executed if s0 is 0 (false)
+    <{
+        // _ split_depth:(Maybe (## 5))
+        //   special:(Maybe TickTock)
+        //   code:(Maybe ^Cell)
+        //   data:(Maybe ^Cell)
+        //   library:(Maybe ^Cell)
+        // = StateInit;
+        ROT                // place message Builder on top
+        b{10} STSLICECONST // store Maybe = true, Either = false
+        // Start composing inlined StateInit
+        b{00} STSLICECONST // store split_depth and special first
+        STDICT             // store code
+        STDICT             // store data
+        b{0} STSLICECONST  // store library
+    }> PUSHCONT
+
+    // Group 3: IFELSE that does the branching shown above
+    IFELSE
+    // → Stack state
+    // s0: Builder
+    // s1: null or StateInit
+    // s2: `body`
+    // s3: `mode`
+
+    // Group 4: Finalizing the message
+    STDICT // store `body` as ref with an extra Maybe bit, since `body` might be null
+    ENDC
+    // → Stack state
+    // s0: Cell
+    // s1: `mode`
+
+    // Group 5: Sending the message, with `mode` on top
+    SWAP
+    SENDRAWMSG // https://github.com/tact-lang/tact/issues/1558
+""";
+
+builder $Builder$_fun_storeCoins(builder $self, int $value) impure asm """
+    STVARUINT16
+""";
+
+builder $Builder$_fun_storeSlice(builder $self, slice $slice) impure asm """
+    STSLICER
+""";
+
+cell $Builder$_fun_endCell(builder $self) impure asm """
+    ENDC
+""";
+
+builder $Builder$_fun_storeAddress(builder $self, slice $address) impure asm """
+    STSLICER
+""";
+
+slice $Cell$_fun_beginParse(cell $self) impure asm """
+    CTOS
+""";
+
+int $Cell$_fun_hash(cell $self) impure asm """
+    HASHCU
+""";
+
+((int, int), ()) $TonGaslessWallet$_fun_notify((int, int) $self, cell $body) impure inline {
+    var (($self'owner, $self'seqno)) = $self;
+    slice $to = __tact_context_get_sender();
+    int $bounce = false;
+    if (false) {
+        int $balance = $global_myBalance();
+        int $balanceBeforeMessage = ($balance - $Context$_get_value(__tact_context_get()));
+        if (($balanceBeforeMessage < 0)) {
+            $global_nativeReserve(0, 0);
+            $global_message($MessageParameters$_constructor_bounce_to_value_mode_body($bounce, $to, 0, 130, $body));
+            return (($self'owner, $self'seqno), ());
+        }
+    }
+    $global_message($MessageParameters$_constructor_bounce_to_value_mode_body($bounce, $to, 0, 66, $body));
+    return (($self'owner, $self'seqno), ());
+}
+
+;; TonGaslessWallet_TonGaslessWallet.storage.fc
+;;
+;; Type: Context
+;; TLB: _ bounceable:bool sender:address value:int257 raw:^slice = Context
+;;
+
+_ $Context$_get_value((int, slice, int, slice) v) inline {
+    var (v'bounceable, v'sender, v'value, v'raw) = v;
+    return v'value;
+}
+
+;;
+;; Type: SendParameters
+;; TLB: _ mode:int257 body:Maybe ^cell code:Maybe ^cell data:Maybe ^cell value:int257 to:address bounce:bool = SendParameters
+;;
+
+((int, cell, cell, cell, int, slice, int)) $SendParameters$_constructor_to_value_body_mode(slice $to, int $value, cell $body, int $mode) inline {
+    return ($mode, $body, null(), null(), $value, $to, true);
+}
+
+;;
+;; Type: MessageParameters
+;; TLB: _ mode:int257 body:Maybe ^cell value:int257 to:address bounce:bool = MessageParameters
+;;
+
+((int, cell, int, slice, int)) $MessageParameters$_constructor_bounce_to_value_mode_body(int $bounce, slice $to, int $value, int $mode, cell $body) inline {
+    return ($mode, $body, $value, $to, $bounce);
+}
+
+;;
+;; Type: DeployOk
+;; Header: 0xaff90f57
+;; TLB: deploy_ok#aff90f57 queryId:uint64 = DeployOk
+;;
+
+builder $DeployOk$_store(builder build_0, (int) v) inline {
+    var (v'queryId) = v;
+    build_0 = store_uint(build_0, 2952335191, 32);
+    build_0 = build_0.store_uint(v'queryId, 64);
+    return build_0;
+}
+
+cell $DeployOk$_store_cell((int) v, builder b) inline {
+    return $DeployOk$_store(b, v).end_cell();
+}
+
+((int)) $DeployOk$_constructor_queryId(int $queryId) inline {
+    return ($queryId);
+}
+
+;;
+;; Type: TonGaslessWallet
+;; TLB: _ owner:uint256 seqno:uint32 = TonGaslessWallet
+;;
+
+builder $TonGaslessWallet$_store(builder build_0, (int, int) v) inline {
+    var (v'owner, v'seqno) = v;
+    build_0 = build_0.store_uint(v'owner, 256);
+    build_0 = build_0.store_uint(v'seqno, 32);
+    return build_0;
+}
+
+(slice, ((int, int))) $TonGaslessWallet$_load(slice sc_0) inline {
+    var v'owner = sc_0~load_uint(256);
+    var v'seqno = sc_0~load_uint(32);
+    return (sc_0, (v'owner, v'seqno));
+}
+
+(slice, ((int))) $TonGaslessWallet$init$_load(slice sc_0) inline {
+    var v'owner = sc_0~load_int(257);
+    return (sc_0, (v'owner));
+}
+
+(int, int) $TonGaslessWallet$_contract_load() impure inline {
+    slice $sc = get_data().begin_parse();
+    int $loaded = $sc~load_int(1);
+    if ($loaded) {
+        return $sc~$TonGaslessWallet$_load();
+    }
+    else {
+        (int $owner) = $sc~$TonGaslessWallet$init$_load();
+        $sc.end_parse();
+        return $TonGaslessWallet$_contract_init($owner);
+    }
+}
+
+() $TonGaslessWallet$_contract_store((int, int) v) impure inline {
+    builder b = begin_cell();
+    b = b.store_int(true, 1);
+    b = $TonGaslessWallet$_store(b, v);
+    set_data(b.end_cell());
+}
+
+;;
+;; Contract TonGaslessWallet functions
+;;
+
+(int, int) $TonGaslessWallet$_contract_init(int $owner) impure inline {
+    var (($self'owner, $self'seqno)) = (null(), null());
+    $self'owner = $owner;
+    $self'seqno = 0;
+    return ($self'owner, $self'seqno);
+}
+
+((int, int), int) $TonGaslessWallet$_fun_owner((int, int) $self) impure inline_ref {
+    var (($self'owner, $self'seqno)) = $self;
+    var $fresh$ret_0 = $self'owner;
+    return (($self'owner, $self'seqno), $fresh$ret_0);
+}
+
+((int, int), int) $TonGaslessWallet$_fun_seqno((int, int) $self) impure inline_ref {
+    var (($self'owner, $self'seqno)) = $self;
+    var $fresh$ret_1 = $self'seqno;
+    return (($self'owner, $self'seqno), $fresh$ret_1);
+}
+
+;;
+;; Get methods of a Contract TonGaslessWallet
+;;
+
+_ %owner() method_id(83229) {
+    var self = $TonGaslessWallet$_contract_load();
+    var res = self~$TonGaslessWallet$_fun_owner();
+    return res;
+}
+
+_ %seqno() method_id(85143) {
+    var self = $TonGaslessWallet$_contract_load();
+    var res = self~$TonGaslessWallet$_fun_seqno();
+    return res;
+}
+
+;;
+;; Routing of a Contract TonGaslessWallet
+;;
+
+;; message opcode reader utility: only binary receivers
+;; Returns 32 bit message opcode, otherwise throws the "Invalid incoming message" exit code
+(slice, int) ~load_opcode_internal(slice s) asm( -> 1 0) "32 LDUQ 130 THROWIFNOT";
+
+() recv_internal(int msg_value, cell in_msg_cell, slice in_msg) impure {
+    
+    ;; Context
+    var cs = in_msg_cell.begin_parse();
+    cs~skip_bits(2);
+    var msg_bounceable = cs~load_int(1);
+    var msg_bounced = cs~load_int(1);
+    slice msg_sender_addr = cs~load_msg_addr();
+    __tact_context = (msg_bounceable, msg_sender_addr, msg_value, cs);
+    __tact_context_sender = msg_sender_addr;
+    
+    ;; Load contract data
+    var ($self'owner, $self'seqno) = $TonGaslessWallet$_contract_load();
+    
+    ;; Handle bounced messages
+    if (msg_bounced) { return (); }
+    int op = 0;
+    int in_msg_length = slice_bits(in_msg);
+    if (in_msg_length >= 32) {
+        op = in_msg~load_uint(32);
+    }
+    ;; Receive Deploy message
+    if (op == 0x946a98b6) {
+        var $deploy'queryId = in_msg~load_uint(64);
+        ($self'owner, $self'seqno)~$TonGaslessWallet$_fun_notify($DeployOk$_store_cell($DeployOk$_constructor_queryId($deploy'queryId), begin_cell()));
+        $TonGaslessWallet$_contract_store(($self'owner, $self'seqno));
+        return ();
+    }
+    
+    ;; Receive empty message
+    if ((op == 0) & (in_msg_length <= 32)) {
+        $TonGaslessWallet$_contract_store(($self'owner, $self'seqno));
+        return ();
+    }
+    ;; Throw if not handled
+    throw(130);
+}
+
+;; message opcode reader utility: only binary receivers
+;; Returns 32 bit message opcode, otherwise throws the "Invalid incoming message" exit code
+(slice, int) ~load_opcode_external(slice s) asm( -> 1 0) "32 LDUQ 130 THROWIFNOT";
+
+() recv_external(slice in_msg) impure {
+    ;; Load contract data
+    var ($self'owner, $self'seqno) = $TonGaslessWallet$_contract_load();
+    
+    var op = in_msg~load_opcode_external();
+    ;; Receive SignedExecute message
+    if (op == 381959420) {
+        var $msg'target = in_msg~load_msg_addr();
+        var $msg'value = in_msg~load_varuint16();
+        var $msg'payload = in_msg~load_ref();
+        var $msg'seqno = in_msg~load_uint(32);
+        var $msg'signature = in_msg~load_ref();
+        cell $verifyMsg = $Builder$_fun_endCell(store_uint($Builder$_fun_storeSlice($Builder$_fun_storeCoins($Builder$_fun_storeAddress($global_beginCell(), $msg'target), $msg'value), $Cell$_fun_beginParse($msg'payload)), $msg'seqno, 32));
+        int $hash = $Cell$_fun_hash($verifyMsg);
+        throw_unless(57400, $global_checkSignature($hash, $Cell$_fun_beginParse($msg'signature), $self'owner));
+        throw_unless(32964, ($msg'seqno == $self'seqno));
+        $self'seqno = $self'seqno + 1;
+        $global_send($SendParameters$_constructor_to_value_body_mode($msg'target, $msg'value, $msg'payload, 67));
+        $TonGaslessWallet$_contract_store(($self'owner, $self'seqno));
+        return ();
+    }
+    
+    ;; Throw if not handled
+    throw(130);
+}

@@ -114,6 +114,9 @@ contracts/
 | `VITE_SOLSCAN_API_KEY` | Daftar di https://solscan.io (free tier) | `abc123...` |
 | `VITE_ETHERSCAN_API_KEY` | Daftar di https://etherscan.io (free tier) | `abc123...` |
 | `VITE_ZEROX_API_KEY` | Daftar di https://0x.org (free, rate-limited) | `abc123...` |
+| `VITE_ALCHEMY_API_KEY` | Daftar di https://alchemy.com (Token API) | `abc123...` |
+| `VITE_HELIUS_API_KEY` | Daftar di https://helius.dev (DAS/Solana tokens) | `abc123...` |
+| `VITE_TONAPI_KEY` | Daftar di https://tonconsole.com (TonAPI) | `abc123...` |
 | `VITE_SOLANA_RPC` | Daftar di https://helius.dev (free tier) | `https://mainnet.helius-rpc.com/?api-key=...` |
 | `VITE_BACKEND_URL` | Backend URL (default `http://localhost:3001`) | `http://localhost:3001` |
 
@@ -154,48 +157,41 @@ contracts/
 ✅ **Fase 4.2 selesai.** Address Book — type, Zustand store, modal component, integrated di TransferPage & SettingsPage.
 ✅ **Fase 4.3 selesai.** Push Notifications — service wrapper (Browser Notification API), tx status alert di useTransfer, price alert system.
 ✅ **Fase 4.4 selesai (partial).** Gas Sponsorship Contract (EIP-712) — `NodiusRelay.sol` deployed to Sepolia & Base Sepolia. Backend endpoints work. Frontend uses Privy `useSignTypedData` for gas-free flow.
+✅ **UX fixes done.** Home Receive quick button opens QR, Settings disconnect calls `logout()`, Settings profile uses Privy user, Help Center has fallback action, Transfer QR button has fallback address input.
+✅ **Swap UX upgraded.** Swap token selector modal added, slippage has state, quote auto-fetches with debounce.
+✅ **TON basics upgraded.** TON balance fetch added, TON disconnect uses `tonUI.disconnect()`, TON history fetch uses TonAPI.
+✅ **Relayer gaps reduced.** Solana relay path no longer uses `eth_sendRawTransaction`, raw relay inserts pending then updates submitted/failed, worker chain list synced with Sepolia/Base Sepolia, gas pool syncs live relayer balance, `RELAYER_PRIVATE_KEY` guard added.
+✅ **Bridge cleanup done.** Bridge uses EVM-only clean path and status check after submit.
+✅ **Portfolio scan upgraded.** Home balances use Alchemy for EVM native/ERC-20 across Ethereum/Base/Polygon/Arbitrum, Helius for Solana SPL, TonAPI for TON jettons; Home hides tokens without USD price to reduce spam/scam tokens.
+✅ **Solana sponsored swap.** Backend `POST /relay/sponsored-solana-swap` builds Jupiter swap tx with relayer as fee payer, returns partially signed tx. Frontend signs user portion and submits via relay.
+✅ **TON gasless wallet contract.** `TonGaslessWallet.tact` — AA wallet with external message support + ed25519 signature verification. Backend `tonSponsor.ts` + `POST /relay/sponsored-ton-swap` endpoint ready.
+
+## Gas-Free Swap — Status per Chain
+
+| Chain | Mech | Frontend | Backend | Contract | Status |
+|-------|------|----------|---------|----------|--------|
+| EVM | EIP-712 meta-tx via relay contract | ✅ | ✅ | ✅ Deployed | **Siap — tinggal test** |
+| Solana | Backend build swap tx dgn relayer sbg fee payer, user sign partial | ✅ | ✅ | N/A (no contract needed) | **Siap — isi SOL ke relayer** |
+| TON | External message ke TonGaslessWallet contract (ed25519 verify) | ❌ Blocked* | ✅ | ✅ Compiled | **Siap deploy — isi test TON + deploy** |
+
+*\*TON frontend blocked: TonConnect `@tonconnect/ui-react` tidak punya `signData` API. Swap tetap bisa via normal TonConnect flow (user bayar fee sendiri).*
 
 ## Backlog — Yang Perlu Dikerjakan
 
-### 🔴 High Priority (broken UX)
-- [ ] **Receive button** (`HomePage.tsx:261`) — no onClick, harusnya buka QR popup.
-- [ ] **Disconnect Wallet** (`SettingsPage.tsx:318`) — no onClick, harusnya panggil `logout()`.
-- [ ] **Nama & foto profil Settings** (`SettingsPage.tsx:58-60`) — hardcoded `Alex.eth`, pakai dari Privy user.
-- [ ] **Help Center** (`SettingsPage.tsx:317`) — no onClick.
+### 🔴 High Priority
+- [ ] **Fund Solana relayer** — kirim SOL ke `9ErX5EiqVtr9Hr9G4y3kiJxm7xvXUL1dLjrmnXQgaUq1` agar sponsored swap jalan.
+- [ ] **Fund & deploy TonGaslessWallet** — kirim test TON ke `EQCUhWYp6TZ_hAo6hoQa32U86ktKRepuEt9HXDU7hnv78wip`, lalu `npm run deploy` di `ton-contracts/`.
 
-### 🟡 Medium Priority (lengkapi fitur)
-- [ ] **Token selector modal** di SwapPage — kedua token button tidak ada onClick.
-- [ ] **QR scanner** di TransferPage — tombol QrCode next to address input tidak fungsi.
-- [ ] **Swap slippage** — tombol Auto/0.1%/0.5%/1.0% hanya visual, tidak ada state.
-- [ ] **Auto-fetch quote** di Swap — harus auto-quote saat amount berubah (debounce).
-- [ ] **Solana swap** — Jupiter quote ada di service tapi tidak dipanggil.
+### 🟡 Medium Priority
+- [ ] **TON frontend sponsored** — blocked karena TonConnect UI tidak punya `signData`. Alternatif: custom signing via TON wallet raw methods atau tunggu TonConnect update.
+- [ ] **Gas pool monitoring** untuk Solana & TON (currently EVM-only).
 
-### 🟢 Low Priority (rapihin)
-- [ ] **Hapus console.error** di `TransferPage.tsx:52`, `useTransfer.ts:115,182`.
-- [ ] **Hapus unused stores** — `transactionStore.ts` tidak dipakai; `walletStore.ts` hanya di-return dari `useWalletConnection`, belum dipakai nyata.
+### 🟢 Low Priority
+- [ ] **Hapus unused stores** — `transactionStore.ts` masih tidak pakai.
+- [ ] **Integrate wallet contract address** ke frontend (user deploys once, stores address).
 
-### 🟣 Integration Gaps
-- [ ] **TON balance fetch** (`useBalances.ts:88`) — selalu return `—`, tidak ada RPC call.
-- [ ] **TON disconnect** (`useWalletConnection.ts:49`) — pakai `tonModal.close()` bukan disconnect sesungguhnya.
-- [ ] **Disconnect per-chain** (`useWalletConnection.ts:36,42`) — EVM & Solana disconnect malah `logout()` full.
-- [ ] **TON history** (`HistoryPage.tsx:67`) — `tonAddress` masuk dependency, tapi tidak ada fetch history TON.
-
-### 🔵 Backend / Relayer Gaps
-- [ ] **Solana relay broken** (`relayer.ts:34`) — `/relay/submit` selalu broadcast via `eth_sendRawTransaction`, walau `source: 'solana'`.
-- [ ] **Worker queue tidak efektif** (`worker.ts:39`, `relayer.ts:51`) — worker proses `pending/raw`, tapi `submitRelay` langsung insert status `submitted`.
-- [ ] **Worker chain list tidak sinkron** (`worker.ts:5`) — Sepolia/Base Sepolia ada di relayer, tidak ada di worker.
-- [ ] **Gas pool monitor belum real sync** (`worker.ts:65`) — cuma baca DB dan warn, belum update dari relayer balance/on-chain.
-- [ ] **Missing env guard** (`relayContract.ts:53`) — `RELAYER_PRIVATE_KEY` kosong bisa crash `privateKeyToAccount`.
-
-### 🟤 Bridge / History Gaps
-- [ ] **Bridge EVM-only** (`BridgePage.tsx:17`) — chain list hanya EVM, belum Solana/TON.
-- [ ] **Bridge address mismatch** (`BridgePage.tsx:91,247`) — `fromAddress` bisa Solana/TON, tapi eksekusi wajib `evm.address`.
-- [ ] **Bridge status unused** (`bridge.ts:36`) — `getBridgeStatus` ada tapi belum dipakai untuk tracking.
-
-## Scan Summary
-
-- File inti yang sudah discan: `HomePage`, `SettingsPage`, `SwapPage`, `TransferPage`, `BridgePage`, `HistoryPage`, `WalletPage`, hooks utama, services `swap/relay/bridge/transfer`, backend `index/relayer/relayContract/worker`, contract `NodiusRelay.sol`.
-- File yang belum discan detail penuh: semua `src/components/*`, `src/stores/*`, `src/types/*`, `src/providers/*`, `App.tsx`, `main.tsx`, `services/price/explorer/notifications`, `backend/src/db/*`, `contracts/scripts/*`.
+### 🟠 Portfolio / Balance
+- [ ] **Token verification/allowlist** — stronger spam filtering still needed for production.
 
 ## Notable
 
@@ -205,3 +201,13 @@ contracts/
 - Build warnings (`INVALID_ANNOTATION`, chunk size) are from third-party packages — safe to ignore.
 - Privy bundle is large (PWA workbox limit increased to 4 MB).
 - TON wallet kept independent — Privy doesn't support TON.
+- **TON relay limitation** — TonConnect UI (`@tonconnect/ui-react`) tidak punya `signData` API, jadi user tidak bisa sign arbitrary data untuk sponsored swap. Contract + backend infra sudah siap, menunggu workaround atau TonConnect update.
+- **Solana fee sponsorship** — backend `solanaSponsor.ts` build Jupiter swap dengan relayer sebagai fee payer, sign partial, return partially-signed tx. User sign sisanya di frontend via `useSignTransaction`, kirim fully-signed ke `/relay/submit`.
+- **Relayer keys sudah diisi** — `SOLANA_RELAYER_PRIVATE_KEY` dan `TON_RELAYER_MNEMONIC` sudah ada di `backend/.env`. Solana relayer pubkey: `9ErX5EiqVtr9Hr9G4y3kiJxm7xvXUL1dLjrmnXQgaUq1`. TON deployer (testnet): `EQCUhWYp6TZ_hAo6hoQa32U86ktKRepuEt9HXDU7hnv78wip`.
+- **TonGaslessWallet compiled** — ada di `ton-contracts/build/`, tinggal fund deployer dan `npm run deploy`.
+
+## Scan Summary
+
+- File inti yang sudah discan: `HomePage`, `SettingsPage`, `SwapPage`, `TransferPage`, `BridgePage`, `HistoryPage`, `WalletPage`, hooks utama, services `swap/relay/bridge/transfer`, backend `index/relayer/relayContract/worker`, contract `NodiusRelay.sol`.
+- File yang belum discan detail penuh: semua `src/components/*`, `src/stores/*`, `src/types/*`, `src/providers/*`, `App.tsx`, `main.tsx`, `services/price/explorer/notifications`, `backend/src/db/*`, `contracts/scripts/*`.
+

@@ -338,11 +338,18 @@ export default function HomePage() {
       </div>
 
       <div className="px-5">
-        <h3 className="text-base font-bold mb-5 flex items-center gap-2">
-          <Coins size={16} className="text-neon" />
-          Asset
-        </h3>
-        {isLoadingAssets ? (
+        {isInitialDataLoading ? (
+          <div className="flex items-center gap-2 mb-5">
+            <SkeletonBlock className="w-4 h-4" />
+            <SkeletonBlock className="w-14 h-4 rounded-md" />
+          </div>
+        ) : (
+          <h3 className="text-base font-bold mb-5 flex items-center gap-2">
+            <Coins size={16} className="text-neon" />
+            Asset
+          </h3>
+        )}
+        {isInitialDataLoading ? (
           <div className="flex flex-col gap-2">
             {[0, 1, 2, 3].map((item) => (
               <div key={item} className="flex items-center justify-between bg-surface/50 p-3.5 rounded-[18px] border border-surfaceLight">

@@ -1,52 +1,34 @@
-import { beginCell, Cell, Address, toNano } from '@ton/ton'
+import { beginCell, Cell, Address, TonClient } from '@ton/ton'
 import { hasTonRelayer } from './sponsoredRelayers'
 
-const TON_CENTER_API = 'https://toncenter.com/api/v2/jsonRPC'
+const TON_CENTER_API = 'https://testnet.toncenter.com/api/v2/jsonRPC'
 
-export async function sendTonExternalMessage(bocBase64: string): Promise<string> {
-  if (!hasTonRelayer()) throw new Error('TON relayer not configured')
-
-  const res = await fetch(TON_CENTER_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'sendBoc',
-      params: [bocBase64],
-    }),
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`TON RPC error: ${res.status} ${text}`)
-  }
-
-  const data = await res.json()
-  if (data.error) throw new Error(`TON RPC error: ${data.error.message}`)
-
-  return data.result as string
-}
-
-export function buildExternalMessageBoc(
-  walletAddress: string,
-  target: string,
-  value: string,
+export function buildSignedExecuteBody(
+  targetAddress: string,
+  valueCoins: string,
+  payloadBase64: string,
   seqno: number,
   signatureBase64: string
-): string {
-  const bodyCell = beginCell()
-    .storeAddress(Address.parse(target))
-    .storeCoins(toNano(value))
+): Cell {
+  return beginCell()
+    .storeAddress(Address.parse(targetAddress))
+    .storeCoins(BigInt(valueCoins))
+    .storeRef(Cell.fromBase64(payloadBase64))
     .storeUint(seqno, 32)
     .storeRef(Cell.fromBase64(signatureBase64))
     .endCell()
+}
 
-  const externalMsgCell = beginCell()
-    .storeAddress(Address.parse(walletAddress))
-    .storeCoins(toNano(value))
-    .storeRef(bodyCell)
-    .endCell()
+export async function sendTonExternalMessage(
+  walletAddress: string,
+  bodyCell: Cell
+): Promise<string> {
+  if (!hasTonRelayer()) throw new Error('TON relayer not configured')
 
-  return externalMsgCell.toBoc().toString('base64')
+  const client = new TonClient({ endpoint: TON_CENTER_API })
+  const contract = { address: Address.parse(walletAddress) }
+
+  await client.sendExternalMessage(contract, bodyCell)
+
+  return 'TON external message sent'
 }
