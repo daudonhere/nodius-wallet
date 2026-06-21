@@ -20,6 +20,7 @@ import {
   type DebridgeQuoteResult,
 } from '../services/debridge'
 import BottomNavigation from '../components/BottomNavigation'
+import QuickAmount from '../components/QuickAmount'
 
 const CHAIN_ICONS: Record<string, string> = {
   Solana: 'https://cryptologos.cc/logos/solana-sol-logo.svg',
@@ -49,26 +50,33 @@ function ChainPickerModal({ open, chains, selected, onSelect, onClose }: {
   onSelect: (c: BridgeChain) => void
   onClose: () => void
 }) {
-  if (!open) return null
+  const [closing, setClosing] = useState(false)
+
+  const handleClose = () => {
+    setClosing(true)
+    setTimeout(() => { setClosing(false); onClose() }, 180)
+  }
+
+  if (!open && !closing) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={handleClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-md bg-surface border border-surfaceLight rounded-t-[28px] p-5 pb-10 animate-slide-up"
+        className={`${closing ? 'swap-token-drawer-out' : 'swap-token-drawer'} relative w-full max-w-md max-h-[75vh] bg-surface border border-surfaceLight rounded-t-[28px] p-5 pb-6 flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center mb-5">
+        <div className="flex justify-between items-center mb-5 shrink-0">
           <h3 className="text-base font-bold">Select Chain</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400">
+          <button onClick={handleClose} className="w-8 h-8 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
             <X size={16} />
           </button>
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-2 pr-1">
           {chains.map((c) => (
             <button
               key={c.id}
-              onClick={() => { onSelect(c); onClose() }}
+              onClick={() => { onSelect(c); handleClose() }}
               className={`flex items-center gap-3.5 p-3.5 rounded-[16px] transition-colors ${
                 selected?.id === c.id ? 'bg-surfaceLight border border-white/5' : 'hover:bg-surfaceLight/50'
               }`}
@@ -175,10 +183,15 @@ export default function BridgePage() {
     }), [prices, tokens, chainIconMap, allChains])
 
   useEffect(() => {
-    if (sourceTokenOptions.length > 0 && !sourceTokenOptions.find((t) => t.address === fromToken.address && t.chainName === fromToken.chainName)) {
-      setFromToken(sourceTokenOptions[0])
+    if (sourceTokenOptions.length > 0) {
+      const match = sourceTokenOptions.find((t) => t.address === fromToken.address && t.chainName === fromToken.chainName)
+      if (match) {
+        if (match.chainId !== fromToken.chainId || match.decimals !== fromToken.decimals) setFromToken(match)
+      } else {
+        setFromToken(sourceTokenOptions[0])
+      }
     }
-  }, [sourceTokenOptions, fromToken.address, fromToken.chainName])
+  }, [sourceTokenOptions, fromToken.address, fromToken.chainName, fromToken.chainId, fromToken.decimals])
 
   useEffect(() => {
     if (!fromToken.symbol || !fromToken.address) {
@@ -208,7 +221,7 @@ export default function BridgePage() {
       return
     }
 
-    getTokenDestChains(fromToken.symbol, fromToken.address, fromToken.chainId || null).then((lifiChains) => {
+    getTokenDestChains(fromToken.symbol, fromToken.address, fromCid || fromToken.chainId || null).then((lifiChains) => {
       const combined = [...lifiChains, ...debridgeChains]
       setDestChains(combined)
       if (combined.length > 0 && !combined.find((c) => c.id === destChain?.id)) {
@@ -287,7 +300,7 @@ export default function BridgePage() {
       return
     }
 
-    const fromChainIdEvm = fromToken.chainId
+    const fromChainIdEvm = fCid > 0 ? fCid : fromToken.chainId
     if (!fromChainIdEvm) {
       setError('Source chain not supported for bridging')
       setLoadingQuote(false)
@@ -523,7 +536,7 @@ export default function BridgePage() {
 
       <main className="flex-1 overflow-y-auto hide-scrollbar pb-32 z-10 px-5">
         {isInitialDataLoading ? (
-          <div className="flex flex-col gap-5 mt-2">
+          <div className="flex flex-col gap-5 mt-4">
             <div className="bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
               <div className="bg-[#0a0a0a] rounded-[24px] p-5 pb-6">
                 <div className="flex justify-between items-center mb-4">
@@ -573,7 +586,7 @@ export default function BridgePage() {
           </div>
         ) : (
         <>
-        <div className="mt-2 bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
+        <div className="mt-4 bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
           <div className="bg-[#0a0a0a] rounded-[24px] p-5 pb-6 border border-transparent focus-within:border-neon/30 transition-colors group">
             <div className="flex justify-between items-center mb-4 text-sm">
               <span className="text-zinc-400 font-medium">From</span>
@@ -599,6 +612,15 @@ export default function BridgePage() {
               </button>
             </div>
             <div className="mt-1 text-zinc-500 text-[13px] font-mono">{fromUsd}</div>
+            <div className="mt-3">
+              <QuickAmount onSelect={(pct) => {
+                const bal = fromToken.balance
+                if (bal && bal !== '—') {
+                  const num = parseFloat(bal) * (pct === 'Max' ? 1 : parseInt(pct) / 100)
+                  setAmount(num.toFixed(6))
+                }
+              }} />
+            </div>
           </div>
 
           <div className="flex justify-center -my-[16px] relative z-10">
@@ -656,7 +678,6 @@ export default function BridgePage() {
                   </span>
                 </span>
               </span>
-              <span className="text-white font-bold">{slippage}</span>
             </div>
             <div className="flex gap-2.5">
               {['Auto', '0.1%', '0.5%', '1.0%'].map((val) => (
@@ -676,7 +697,7 @@ export default function BridgePage() {
               <div className="flex items-center gap-2">
                 {loadingQuote ? <SkeletonBlock className="w-20 h-4 rounded-md" /> : gasFreeAvailable ? (
                   <>
-                    <span className="line-through text-zinc-600 font-mono">{displayQuote && 'feeUsd' in displayQuote ? `~$${Number((displayQuote as any).feeUsd || 0).toFixed(2)}` : displayQuote?.estimate?.gasCosts?.[0] ? `~$${Number(displayQuote.estimate.gasCosts[0].amountUsd).toFixed(2)}` : '—'}</span>
+                    {displayQuote ? <span className="line-through text-zinc-600 font-mono">{'feeUsd' in displayQuote ? `~$${Number((displayQuote as any).feeUsd || 0).toFixed(2)}` : displayQuote.estimate?.gasCosts?.[0] ? `~$${Number(displayQuote.estimate.gasCosts[0].amountUsd).toFixed(2)}` : ''}</span> : null}
                     <div className="flex items-center gap-1 bg-neon/10 px-2 py-0.5 rounded-md">
                       <Zap size={12} className="text-neon" />
                       <span className="text-neon font-bold text-[11px] uppercase tracking-wide">Free</span>
@@ -724,7 +745,7 @@ export default function BridgePage() {
             ) : displayQuote ? (
               'Execute Bridge'
             ) : amount ? (
-              'Fetching Quote...'
+              'Get Quote'
             ) : (
               'Enter Amount'
             )}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useState, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Search, Moon, Coins, Globe, Zap, Fuel, Fingerprint, BellRing, LifeBuoy, LogOut, ChevronRight, Camera, Rocket, BookUser, TrendingUp, Plus, X, Check } from 'lucide-react'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -57,19 +57,12 @@ export default function SettingsPage() {
   const [alertSymbol, setAlertSymbol] = useState('ETH')
   const [alertPrice, setAlertPrice] = useState('')
   const [alertDirection, setAlertDirection] = useState<'above' | 'below'>('above')
-  const [profileName, setProfileName] = useState('My Wallet')
+  const [profileName, setProfileName] = useState(() => s.customProfileName || user?.google?.name || user?.github?.name || user?.discord?.username || user?.email?.address || 'My Wallet')
   const [editingName, setEditingName] = useState(false)
-  const [profilePhoto, setProfilePhoto] = useState('https://i.pravatar.cc/150?u=default')
+  const [profilePhoto, setProfilePhoto] = useState(`https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(profileName)}`)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [currencyOpen, setCurrencyOpen] = useState(false)
   const [networkOpen, setNetworkOpen] = useState(false)
-
-  useEffect(() => {
-    if (editingName) return
-    const name = user?.google?.name || user?.github?.name || user?.discord?.username || user?.email?.address || 'My Wallet'
-    setProfileName(name)
-    setProfilePhoto(`https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name)}`)
-  }, [editingName, user])
 
   const currencies: { value: LocalCurrency; label: string; symbol: string }[] = [
     { value: 'usd', label: 'USD', symbol: '$' },
@@ -120,7 +113,7 @@ export default function SettingsPage() {
                     className="bg-darkbg border border-surfaceLight rounded-lg px-3 py-1.5 text-lg font-bold text-white outline-none focus:border-neon/50 w-40"
                     autoFocus
                   />
-                  <button onClick={() => setEditingName(false)} className="text-neon hover:text-white transition-colors">
+                  <button onClick={() => { setEditingName(false); s.setCustomProfileName(profileName) }} className="text-neon hover:text-white transition-colors">
                     <Check size={18} />
                   </button>
                 </div>

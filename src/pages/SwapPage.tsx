@@ -10,6 +10,7 @@ import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
 import { useWalletConnection } from '../hooks/useWalletConnection'
 import BottomNavigation from '../components/BottomNavigation'
 import NeonButton from '../components/NeonButton'
+import QuickAmount from '../components/QuickAmount'
 import { getJupiterQuote, getJupiterSwapTransaction, getJupiterTokens, getLifiQuote, getLifiTokens, getStonfiQuote, getStonfiSwapTransaction, getStonfiTokens, getZeroXQuote } from '../services/swap'
 import { getSponsoredRelayInfo, getSponsoredSolanaSwap, submitRelayTx, submitSponsoredTonSwap } from '../services/relay'
 import { useBalances } from '../hooks/useBalances'
@@ -479,7 +480,7 @@ export default function SwapPage() {
 
       <main className="flex-1 overflow-y-auto hide-scrollbar pb-32 z-10 px-5">
         {isInitialSwapLoading ? (
-          <div className="flex flex-col gap-5 mt-2">
+          <div className="flex flex-col gap-5 mt-4">
             <div className="bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
               <div className="bg-[#0a0a0a] rounded-[24px] p-5 pb-6">
                 <div className="flex justify-between items-center mb-4">
@@ -529,7 +530,7 @@ export default function SwapPage() {
           </div>
         ) : (
         <>
-        <div className="mt-2 bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
+        <div className="mt-4 bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
           <div className="bg-[#0a0a0a] rounded-[24px] p-5 pb-6 border border-transparent focus-within:border-neon/30 transition-colors group">
             <div className="flex justify-between items-center mb-4 text-sm">
               <span className="text-zinc-400 font-medium">You pay</span>
@@ -557,6 +558,16 @@ export default function SwapPage() {
               </button>}
             </div>
             <div className="mt-1 text-zinc-500 text-[13px] font-mono">{fromUsd}</div>
+            <div className="mt-3">
+              <QuickAmount onSelect={(pct) => {
+                const bal = fromToken.balance
+                if (bal && bal !== '—') {
+                  const num = parseFloat(bal) * (pct === 'Max' ? 1 : parseInt(pct) / 100)
+                  setFromAmount(num.toFixed(6))
+                  setQuote(null)
+                }
+              }} />
+            </div>
           </div>
 
           <div className="flex justify-center -my-[16px] relative z-10">
@@ -596,7 +607,6 @@ export default function SwapPage() {
                 </span>
               </span>
             </span>
-            <span className="text-white font-bold">{slippage}</span>
           </div>
           <div className="flex gap-2.5">
             {['Auto', '0.1%', '0.5%', '1.0%'].map((val) => (
@@ -617,7 +627,7 @@ export default function SwapPage() {
             <div className="flex items-center gap-2">
               {loadingQuote || isInitialSwapLoading ? <SkeletonBlock className="w-20 h-4 rounded-md" /> : gasFreeAvailable ? (
                 <>
-                  <span className="line-through text-zinc-600 font-mono">{quote?.feeUsd ? `$${Number(quote.feeUsd).toFixed(2)}` : quote?.estimatedGas ? `${quote.estimatedGas} gas` : '—'}</span>
+                  {quote?.feeUsd ? <span className="line-through text-zinc-600 font-mono">${Number(quote.feeUsd).toFixed(2)}</span> : null}
                   <div className="flex items-center gap-1 bg-neon/10 px-2 py-0.5 rounded-md">
                     <Zap size={12} className="text-neon" />
                     <span className="text-neon font-bold text-[11px] uppercase tracking-wide">Free</span>

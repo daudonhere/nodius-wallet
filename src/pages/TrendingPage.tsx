@@ -25,7 +25,7 @@ export default function TrendingPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto hide-scrollbar pb-32 z-10 px-5">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 mt-4">
           {trending.map((coin) => (
             <div key={coin.symbol} className="flex items-center justify-between bg-surface/50 p-3.5 rounded-[18px] border border-surfaceLight hover:bg-surface transition-colors cursor-pointer">
               <div className="flex items-center gap-3.5">

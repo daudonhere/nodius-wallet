@@ -14,72 +14,10 @@ import QrScannerModal from '../components/QrScannerModal'
 import { useTransfer } from '../hooks/useTransfer'
 import { useBalances } from '../hooks/useBalances'
 import { useSettingsStore } from '../stores/settingsStore'
-import { getBridgeQuote, getBridgeStatus, resolveDestToken, type BridgeQuote } from '../services/bridge'
+import { getBridgeQuote, getBridgeStatus, resolveDestToken, getLifiChains, loadLifiTokens, type BridgeQuote, type BridgeChain } from '../services/bridge'
 import { DEBRIDGE_SOLANA_CHAIN_ID, DEBRIDGE_TON_CHAIN_ID, getDebridgeQuote as getDebridgeQuoteApi, getDebridgeTx, getDebridgeStatus, type DebridgeQuoteResult } from '../services/debridge'
 import { submitRelayTx } from '../services/relay'
 import { notifyTxConfirmed, notifyTxFailed } from '../services/notifications'
-
-const CHAIN_ICONS: Record<string, string> = {
-  Ethereum: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-  Base: 'https://cryptologos.cc/logos/base-base-logo.svg',
-  Polygon: 'https://cryptologos.cc/logos/polygon-matic-logo.svg',
-  Arbitrum: 'https://cryptologos.cc/logos/arbitrum-arb-logo.svg',
-  Solana: 'https://cryptologos.cc/logos/solana-sol-logo.svg',
-  TON: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg',
-}
-
-const TOKEN_ICONS: Record<string, string> = {
-  ETH: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-  USDC: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg',
-  USDT: 'https://cryptologos.cc/logos/tether-usdt-logo.svg',
-  DAI: 'https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.svg',
-  WBTC: 'https://cryptologos.cc/logos/wrapped-bitcoin-wbtc-logo.svg',
-  SOL: 'https://cryptologos.cc/logos/solana-sol-logo.svg',
-  TON: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg',
-  JUP: 'https://cryptologos.cc/logos/jupiter-jup-logo.svg',
-  BONK: 'https://cryptologos.cc/logos/bonk-bonk-logo.svg',
-}
-
-const POPULAR_CHAINS = ['Ethereum', 'Base', 'Polygon', 'Arbitrum', 'Solana', 'TON'] as const
-
-const DEST_TOKENS: Record<string, { symbol: string; name: string }[]> = {
-  Ethereum: [
-    { symbol: 'ETH', name: 'Ether' },
-    { symbol: 'USDC', name: 'USD Coin' },
-    { symbol: 'USDT', name: 'Tether' },
-    { symbol: 'DAI', name: 'Dai' },
-    { symbol: 'WBTC', name: 'Wrapped Bitcoin' },
-  ],
-  Base: [
-    { symbol: 'ETH', name: 'Ether' },
-    { symbol: 'USDC', name: 'USD Coin' },
-    { symbol: 'USDT', name: 'Tether' },
-    { symbol: 'DAI', name: 'Dai' },
-  ],
-  Polygon: [
-    { symbol: 'POL', name: 'Polygon' },
-    { symbol: 'USDC', name: 'USD Coin' },
-    { symbol: 'USDT', name: 'Tether' },
-    { symbol: 'DAI', name: 'Dai' },
-  ],
-  Arbitrum: [
-    { symbol: 'ETH', name: 'Ether' },
-    { symbol: 'USDC', name: 'USD Coin' },
-    { symbol: 'USDT', name: 'Tether' },
-    { symbol: 'DAI', name: 'Dai' },
-  ],
-  Solana: [
-    { symbol: 'SOL', name: 'Solana' },
-    { symbol: 'USDC', name: 'USD Coin' },
-    { symbol: 'USDT', name: 'Tether' },
-    { symbol: 'JUP', name: 'Jupiter' },
-    { symbol: 'BONK', name: 'Bonk' },
-  ],
-  TON: [
-    { symbol: 'TON', name: 'Toncoin' },
-    { symbol: 'USDT', name: 'Tether' },
-  ],
-}
 
 type ChainType = 'evm' | 'solana' | 'ton'
 
@@ -89,21 +27,20 @@ function getChainType(chain: string): ChainType {
   return 'evm'
 }
 
-function chainNameToChainId(name: string): number {
-  const map: Record<string, number> = {
-    Ethereum: 1,
-    Base: 8453,
-    Polygon: 137,
-    Arbitrum: 42161,
-    Solana: DEBRIDGE_SOLANA_CHAIN_ID,
-    TON: DEBRIDGE_TON_CHAIN_ID,
-  }
-  return map[name] || 0
-}
-
 function isEVMChainId(id: number): boolean {
   return id > 0 && id !== DEBRIDGE_SOLANA_CHAIN_ID
 }
+
+const DEBRIDGE_CHAINS: BridgeChain[] = [
+  { id: DEBRIDGE_SOLANA_CHAIN_ID, name: 'Solana', icon: 'https://cryptologos.cc/logos/solana-sol-logo.svg', nativeToken: 'SOL' },
+  { id: DEBRIDGE_TON_CHAIN_ID, name: 'TON', icon: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg', nativeToken: 'TON' },
+]
+
+const POPULAR_TOKEN_SYMBOLS = new Set([
+  'ETH', 'WETH', 'USDC', 'USDT', 'DAI', 'WBTC', 'LINK', 'UNI', 'AAVE',
+  'MATIC', 'POL', 'ARB', 'OP', 'BNB',
+  'SOL', 'JUP', 'JTO', 'BONK', 'WIF', 'PYTH', 'RAY', 'ORCA',
+])
 
 interface TransferToken {
   symbol: string
@@ -125,7 +62,10 @@ export default function TransferPage() {
   const [closingTokenPicker, setClosingTokenPicker] = useState(false)
   const [destTokenPickerOpen, setDestTokenPickerOpen] = useState(false)
   const [chainPickerOpen, setChainPickerOpen] = useState(false)
+  const [closingChainPicker, setClosingChainPicker] = useState(false)
   const [showQrScanner, setShowQrScanner] = useState(false)
+  const [aggregator, setAggregator] = useState<'0x' | 'LI.FI' | 'deBridge'>('LI.FI')
+  const [slippage, setSlippage] = useState('Auto')
   const [loadingQuote, setLoadingQuote] = useState(false)
   const [bridgeQuote, setBridgeQuote] = useState<BridgeQuote | null>(null)
   const [debridgeQuote, setDebridgeQuote] = useState<DebridgeQuoteResult | null>(null)
@@ -141,22 +81,54 @@ export default function TransferPage() {
   const setGasFeeRouting = useSettingsStore((s) => s.setGasFeeRouting)
 
   const [destNetwork, setDestNetwork] = useState<string>('Ethereum')
-  const [destToken, setDestToken] = useState<{ symbol: string; name: string }>({ symbol: '', name: '' })
+  const [allChains, setAllChains] = useState<BridgeChain[]>([])
+  const [selectedSourceToken, setSelectedSourceToken] = useState<TransferToken | null>(null)
+  const [destToken, setDestToken] = useState<{ symbol: string; name: string; icon: string }>({ symbol: '', name: '', icon: '' })
+  const [destTokenOptions, setDestTokenOptions] = useState<{ symbol: string; name: string; icon: string; address: string; decimals: number }[]>([])
+
+  useEffect(() => {
+    getLifiChains().then(setAllChains)
+  }, [])
+
+  const chainIconMap = useMemo(() => {
+    const map: Record<string, string> = {
+      Solana: 'https://cryptologos.cc/logos/solana-sol-logo.svg',
+      TON: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg',
+    }
+    for (const c of allChains) {
+      map[c.name] = c.icon
+      map[String(c.id)] = c.icon
+    }
+    return map
+  }, [allChains])
+
+  const allDestChains = useMemo(() => {
+    return [...allChains, ...DEBRIDGE_CHAINS]
+  }, [allChains])
+
+  function tokenIcon(symbol: string): string {
+    return `https://cryptologos.cc/logos/${symbol.toLowerCase()}-${symbol.toLowerCase()}-logo.svg`
+  }
+
+  function chainNameToChainId(name: string): number {
+    if (name === 'Solana') return DEBRIDGE_SOLANA_CHAIN_ID
+    if (name === 'TON') return DEBRIDGE_TON_CHAIN_ID
+    const found = allChains.find((c) => c.name === name)
+    return found?.id || 0
+  }
 
   const sourceTokens = useMemo<TransferToken[]>(() => tokens
     .filter((t) => t.chainName && t.address && t.decimals != null && Number(t.balance) > 0)
     .map((t) => ({
       symbol: t.symbol,
       name: t.symbol,
-      icon: t.icon || CHAIN_ICONS[t.chainName || ''] || CHAIN_ICONS.Ethereum,
+      icon: t.icon || chainIconMap[t.chainName || ''] || chainIconMap.Ethereum || '',
       address: t.address || '',
       balance: t.balance,
       chainName: t.chainName || 'Ethereum',
-      chainIcon: CHAIN_ICONS[t.chainName || 'Ethereum'] || CHAIN_ICONS.Ethereum,
+      chainIcon: chainIconMap[t.chainName || 'Ethereum'] || '',
       decimals: t.decimals || 18,
-    })), [tokens])
-
-  const [selectedSourceToken, setSelectedSourceToken] = useState<TransferToken | null>(null)
+    })), [tokens, chainIconMap])
 
   useEffect(() => {
     if (sourceTokens.length > 0 && (!selectedSourceToken || !sourceTokens.find((t) => t.address === selectedSourceToken.address && t.chainName === selectedSourceToken.chainName))) {
@@ -165,20 +137,63 @@ export default function TransferPage() {
   }, [sourceTokens, selectedSourceToken])
 
   useEffect(() => {
-    const tokens = DEST_TOKENS[destNetwork]
-    if (tokens && tokens.length > 0 && !tokens.find((t) => t.symbol === destToken.symbol)) {
-      setDestToken(tokens[0])
+    const cid = chainNameToChainId(destNetwork)
+    if (cid === DEBRIDGE_SOLANA_CHAIN_ID) {
+      setDestTokenOptions([
+        { symbol: 'SOL', name: 'Solana', icon: tokenIcon('SOL'), address: 'So11111111111111111111111111111111111111112', decimals: 9 },
+        { symbol: 'USDC', name: 'USD Coin', icon: tokenIcon('USDC'), address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
+        { symbol: 'USDT', name: 'Tether', icon: tokenIcon('USDT'), address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
+        { symbol: 'JUP', name: 'Jupiter', icon: tokenIcon('JUP'), address: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN', decimals: 6 },
+        { symbol: 'BONK', name: 'Bonk', icon: tokenIcon('BONK'), address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', decimals: 5 },
+        { symbol: 'WIF', name: 'dogwifhat', icon: tokenIcon('WIF'), address: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', decimals: 6 },
+        { symbol: 'PYTH', name: 'Pyth Network', icon: tokenIcon('PYTH'), address: 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3', decimals: 6 },
+        { symbol: 'RAY', name: 'Raydium', icon: tokenIcon('RAY'), address: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', decimals: 6 },
+      ])
+    } else if (cid === DEBRIDGE_TON_CHAIN_ID) {
+      setDestTokenOptions([
+        { symbol: 'TON', name: 'Toncoin', icon: tokenIcon('TON'), address: '0:0', decimals: 9 },
+        { symbol: 'USDT', name: 'Tether', icon: tokenIcon('USDT'), address: 'EQCxE6mUtQJKFnG7KjR1J8F2vPLWQh6UxQEY6pJmBbsCfy9j', decimals: 6 },
+      ])
+    } else {
+      loadLifiTokens(cid).then((tokens) => {
+        const filtered = tokens
+          .filter((t) => POPULAR_TOKEN_SYMBOLS.has(t.symbol))
+          .map((t) => ({
+            symbol: t.symbol,
+            name: t.name || t.symbol,
+            icon: t.logoURI || tokenIcon(t.symbol),
+            address: t.address,
+            decimals: t.decimals || 18,
+          }))
+        if (filtered.length > 0) {
+          setDestTokenOptions(filtered)
+        } else {
+          setDestTokenOptions(tokens.slice(0, 20).map((t) => ({
+            symbol: t.symbol,
+            name: t.name || t.symbol,
+            icon: t.logoURI || tokenIcon(t.symbol),
+            address: t.address,
+            decimals: t.decimals || 18,
+          })))
+        }
+      })
     }
-  }, [destNetwork, destToken.symbol])
+  }, [destNetwork, allChains])
+
+  useEffect(() => {
+    if (destTokenOptions.length > 0 && !destTokenOptions.find((t) => t.symbol === destToken.symbol)) {
+      setDestToken(destTokenOptions[0])
+    }
+  }, [destTokenOptions, destToken.symbol])
 
   const currentSourceToken = selectedSourceToken || (sourceTokens.length > 0 ? sourceTokens[0] : {
     symbol: 'ETH',
     name: 'Ethereum',
-    icon: CHAIN_ICONS.Ethereum,
+    icon: chainIconMap.Ethereum || '',
     address: '',
     balance: '0',
     chainName: 'Ethereum',
-    chainIcon: CHAIN_ICONS.Ethereum,
+    chainIcon: chainIconMap.Ethereum || '',
     decimals: 18,
   })
 
@@ -207,7 +222,7 @@ export default function TransferPage() {
       if (isEVMChainId(fCid) && isEVMChainId(tCid)) {
         const destAddr = await resolveDestToken(destToken.symbol, currentSourceToken.address, tCid)
         if (destAddr) {
-          const q = await getBridgeQuote(fCid, tCid, currentSourceToken.address, destAddr.address, amt, evm.address || '', address)
+          const q = await getBridgeQuote(fCid, tCid, currentSourceToken.address, destAddr.address, amt, evm.address || '', address, slippage)
           if (q) { setBridgeQuote(q); setDebridgeQuote(null); setLoadingQuote(false); return }
         }
       }
@@ -350,7 +365,7 @@ export default function TransferPage() {
       const timer = setTimeout(() => fetchQuote(), 500)
       return () => clearTimeout(timer)
     }
-  }, [isCrossTransfer, address, amount, currentSourceToken.address, currentSourceToken.symbol, currentSourceToken.chainName, destToken.symbol, destNetwork])
+  }, [isCrossTransfer, address, amount, currentSourceToken.address, currentSourceToken.symbol, currentSourceToken.chainName, destToken.symbol, destNetwork, aggregator, slippage])
 
   const [pendingCrossInfo, setPendingCrossInfo] = useState<{
     txHash?: string; orderId?: string; tool?: string; type: 'lifi' | 'debridge'
@@ -415,6 +430,14 @@ export default function TransferPage() {
     }, 180)
   }
 
+  const closeChainPicker = () => {
+    setClosingChainPicker(true)
+    window.setTimeout(() => {
+      setChainPickerOpen(false)
+      setClosingChainPicker(false)
+    }, 180)
+  }
+
   const SkeletonBlock = ({ className }: { className: string }) => (
     <div className={`animate-pulse rounded-full bg-surfaceLight/70 ${className}`} />
   )
@@ -442,11 +465,7 @@ export default function TransferPage() {
             <NeonButton onClick={() => { transfer.reset(); navigate(-1) }}>Done</NeonButton>
           </div>
         ) : isInitialLoading ? (
-          <div className="flex flex-col gap-5 mt-2">
-            <div className="bg-surface border border-surfaceLight rounded-[20px] p-4">
-              <SkeletonBlock className="w-24 h-4 rounded-md mb-3" />
-              <SkeletonBlock className="w-full h-11 rounded-xl" />
-            </div>
+          <div className="flex flex-col gap-5 mt-4">
             <div className="bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
               <div className="bg-[#0a0a0a] rounded-[24px] p-5 pb-6">
                 <div className="flex justify-between items-center mb-4">
@@ -458,19 +477,38 @@ export default function TransferPage() {
                   <SkeletonBlock className="w-24 h-11 rounded-full" />
                 </div>
                 <div className="mt-2"><SkeletonBlock className="w-20 h-4 rounded-md" /></div>
+                <div className="mt-3 flex gap-2">
+                  <SkeletonBlock className="w-12 h-7 rounded-lg" />
+                  <SkeletonBlock className="w-14 h-7 rounded-lg" />
+                  <SkeletonBlock className="w-16 h-7 rounded-lg" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg">
+              <div className="bg-[#0a0a0a] rounded-[24px] p-5">
+                <SkeletonBlock className="w-8 h-4 rounded-md mb-4" />
+                <div className="relative mb-4">
+                  <SkeletonBlock className="w-full h-12 rounded-[20px]" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <SkeletonBlock className="w-12 h-4 rounded-md" />
+                  <SkeletonBlock className="w-24 h-8 rounded-full" />
+                </div>
               </div>
             </div>
             <div className="bg-surface/60 border border-surfaceLight rounded-[20px] p-4">
               <div className="flex justify-between items-center mb-3"><SkeletonBlock className="w-16 h-4 rounded-md" /><SkeletonBlock className="w-32 h-4 rounded-md" /></div>
-              <div className="flex justify-between items-center mb-3"><SkeletonBlock className="w-16 h-4 rounded-md" /><SkeletonBlock className="w-20 h-4 rounded-md" /></div>
-              <div className="flex justify-between items-center"><SkeletonBlock className="w-12 h-4 rounded-md" /><SkeletonBlock className="w-10 h-4 rounded-md" /></div>
+              <div className="flex justify-between items-center mb-3"><SkeletonBlock className="w-14 h-4 rounded-md" /><SkeletonBlock className="w-20 h-4 rounded-md" /></div>
+              <div className="flex justify-between items-center mb-3"><SkeletonBlock className="w-14 h-4 rounded-md" /><SkeletonBlock className="w-16 h-4 rounded-md" /></div>
+              <div className="flex justify-between items-center mb-3"><SkeletonBlock className="w-10 h-4 rounded-md" /><SkeletonBlock className="w-20 h-4 rounded-md" /></div>
+              <div className="flex justify-between items-center pt-3 border-t border-surfaceLight/50"><SkeletonBlock className="w-16 h-4 rounded-md" /><SkeletonBlock className="w-10 h-5 rounded-full" /></div>
             </div>
             <SkeletonBlock className="w-full h-12 rounded-xl" />
           </div>
         ) : (
           <>
 
-            <div className="bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg mb-4">
+            <div className="bg-surface border border-surfaceLight rounded-[28px] p-2 shadow-lg mb-4 mt-4">
               <div className="bg-[#0a0a0a] rounded-[24px] p-5 pb-6">
                 <div className="flex justify-between items-center mb-4 text-sm">
                   <span className="text-zinc-400 font-medium">You send</span>
@@ -533,30 +571,30 @@ export default function TransferPage() {
                     </button>
                   </div>
                 </div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs text-zinc-400 font-medium">Network</span>
-                  <button
-                    onClick={() => setChainPickerOpen(true)}
-                    className="flex items-center gap-2 bg-surfaceLight hover:bg-surfaceLight/80 transition-colors py-2 px-3.5 rounded-full border border-white/5 shadow-sm"
-                  >
-                    <img src={CHAIN_ICONS[destNetwork]} alt={destNetwork} className="w-4 h-4 rounded-full" />
-                    <span className="text-xs font-bold">{destNetwork}</span>
-                    <ChevronDown size={12} className="text-zinc-400" />
-                  </button>
-                </div>
                 {destToken.symbol && (
-                  <div className="flex items-center justify-between pt-2.5 border-t border-surfaceLight/40">
+                  <div className="flex items-center justify-between mb-3">
                     <span className="text-xs text-zinc-400 font-medium">Token</span>
                     <button
                       onClick={() => setDestTokenPickerOpen(true)}
                       className="flex items-center gap-2 bg-surface hover:bg-surfaceLight/80 transition-colors py-2 px-3 rounded-full border border-white/5"
                     >
-                      <img src={TOKEN_ICONS[destToken.symbol] || CHAIN_ICONS[destNetwork]} alt={destToken.symbol} className="w-4 h-4 rounded-full" />
+                      <img src={destTokenOptions.find((t) => t.symbol === destToken.symbol)?.icon || chainIconMap[destNetwork] || ''} alt={destToken.symbol} className="w-4 h-4 rounded-full" />
                       <span className="text-xs font-bold">{destToken.symbol}</span>
                       <ChevronDown size={12} className="text-zinc-400" />
                     </button>
                   </div>
                 )}
+                <div className="flex items-center justify-between pt-2.5 border-t border-surfaceLight/40">
+                  <span className="text-xs text-zinc-400 font-medium">Network</span>
+                  <button
+                    onClick={() => setChainPickerOpen(true)}
+                    className="flex items-center gap-2 bg-surfaceLight hover:bg-surfaceLight/80 transition-colors py-2 px-3.5 rounded-full border border-white/5 shadow-sm"
+                  >
+                    <img src={chainIconMap[destNetwork] || ''} alt={destNetwork} className="w-4 h-4 rounded-full" />
+                    <span className="text-xs font-bold">{destNetwork}</span>
+                    <ChevronDown size={12} className="text-zinc-400" />
+                  </button>
+                </div>
                 {address && destToken.symbol && (
                   <p className="text-[11px] text-zinc-500 mt-3 text-center italic">
                     Send {destToken.symbol} on {destNetwork}
@@ -565,6 +603,28 @@ export default function TransferPage() {
               </div>
             </div>
 
+            {isCrossTransfer && (
+              <div className="mb-5 px-1">
+                <div className="flex justify-between items-center mb-3 text-[13px]">
+                  <span className="text-zinc-400 font-medium flex items-center gap-1.5">
+                    Slippage Tolerance
+                    <span className="relative group flex items-center">
+                      <span className="text-zinc-500 text-sm cursor-help">ⓘ</span>
+                      <span className="pointer-events-none absolute left-1/2 bottom-6 z-20 w-56 -translate-x-1/2 rounded-xl border border-surfaceLight bg-surface px-3 py-2 text-[11px] leading-relaxed text-zinc-400 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                        Maximum price movement allowed before transfer fails.
+                      </span>
+                    </span>
+                  </span>
+                </div>
+                <div className="flex gap-2.5">
+                  {['Auto', '0.1%', '0.5%', '1.0%'].map((val) => (
+                    <button key={val} onClick={() => setSlippage(val)} className={`flex-1 border font-semibold py-2.5 rounded-[14px] text-sm transition-colors ${val === slippage ? 'bg-neon/10 border-neon/30 text-neon font-bold shadow-[0_0_12px_rgba(204,255,0,0.15)]' : 'bg-surface border-surfaceLight text-zinc-400 hover:text-white hover:bg-surfaceLight'}`}>
+                      {val}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="bg-surface/60 border border-surfaceLight rounded-[20px] p-4 mb-6">
               <div className="flex justify-between items-center mb-3.5 text-[13px]">
                 <span className="text-zinc-400 font-medium">Exchange Rate</span>
@@ -574,13 +634,10 @@ export default function TransferPage() {
                 <span className="text-zinc-400 font-medium">Network Fee</span>
                 <div className="flex items-center gap-2">
                   {gasFeeRouting ? (
-                    <>
-                      <span className="line-through text-zinc-600 font-mono">—</span>
-                      <div className="flex items-center gap-1 bg-neon/10 px-2 py-0.5 rounded-md">
-                        <Zap size={12} className="text-neon" />
-                        <span className="text-neon font-bold text-[11px] uppercase tracking-wide">Free</span>
-                      </div>
-                    </>
+                    <div className="flex items-center gap-1 bg-neon/10 px-2 py-0.5 rounded-md">
+                      <Zap size={12} className="text-neon" />
+                      <span className="text-neon font-bold text-[11px] uppercase tracking-wide">Free</span>
+                    </div>
                   ) : (
                     <span className="text-zinc-400 font-mono">Dynamic</span>
                   )}
@@ -589,16 +646,36 @@ export default function TransferPage() {
               <div className="flex justify-between items-center mb-3.5 text-[13px]">
                 <span className="text-zinc-400 font-medium">Aggregator</span>
                 <div className="flex items-center gap-1.5">
-                  {(['0x', 'LI.FI'] as const).map((item) => (
-                    <button key={item} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-surfaceLight text-zinc-400 border border-white/5">
-                      {item}
-                    </button>
-                  ))}
+                  {!isCrossTransfer ? (
+                    <span className="text-zinc-400 font-mono text-xs">Direct</span>
+                  ) : (
+                    ['0x', 'LI.FI', 'deBridge'] as const
+                  ).map((item) => {
+                    const isEvmRoute = currentSourceToken.chainName !== 'Solana' && currentSourceToken.chainName !== 'TON' && destNetwork !== 'Solana' && destNetwork !== 'TON'
+                    const isDeBridge = item === 'deBridge'
+                    const active = isDeBridge ? !isEvmRoute : item === aggregator
+                    const disabled = isDeBridge ? isEvmRoute : !isEvmRoute
+                    return (
+                      <button key={item} onClick={() => {
+                        if (!disabled) {
+                          if (!isDeBridge) setAggregator(item)
+                          setBridgeQuote(null); setDebridgeQuote(null)
+                        }
+                      }} className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${disabled ? 'bg-surfaceLight text-zinc-600 border border-white/5 cursor-not-allowed' : active ? 'bg-neon/10 text-neon border border-neon/20' : 'bg-surfaceLight text-zinc-400 border border-white/5 hover:text-white'}`}>
+                        {item}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-              <div className="flex justify-between items-center text-[13px]">
+              <div className="flex justify-between items-center text-[13px] mt-3">
                 <span className="text-zinc-400 font-medium">Route</span>
-                <span className="font-medium text-zinc-200 text-xs">{gasFeeRouting ? 'Gas-Free Relay' : 'Direct Transfer'}</span>
+                <span className="font-medium text-zinc-200 text-xs">
+                  {!isCrossTransfer ? 'Direct Transfer'
+                  : currentSourceToken.chainName !== 'Solana' && currentSourceToken.chainName !== 'TON' && destNetwork !== 'Solana' && destNetwork !== 'TON'
+                    ? (bridgeQuote?.tool || `${aggregator} Aggregator`)
+                  : 'deBridge'}
+                </span>
               </div>
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-surfaceLight/50">
                 <div className="flex items-center gap-2">
@@ -703,18 +780,21 @@ export default function TransferPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-2 pr-1">
-              {(DEST_TOKENS[destNetwork] || []).map((token) => (
+              {destTokenOptions.length === 0 && (
+                <div className="p-6 text-center text-sm text-zinc-500">Loading tokens...</div>
+              )}
+              {destTokenOptions.map((token) => (
                 <button
                   key={token.symbol}
                   onClick={() => {
-                    setDestToken(token)
+                    setDestToken({ symbol: token.symbol, name: token.name, icon: token.icon })
                     closeDestTokenPicker()
                   }}
                   className={`flex items-center gap-3.5 p-3.5 rounded-[16px] transition-colors hover:bg-surfaceLight/50 ${
                     token.symbol === destToken.symbol ? 'bg-surfaceLight border border-white/5' : ''
                   }`}
                 >
-                  <img src={TOKEN_ICONS[token.symbol] || CHAIN_ICONS[destNetwork]} alt={token.symbol} className="w-9 h-9 rounded-full" />
+                  <img src={token.icon || chainIconMap[destNetwork] || ''} alt={token.symbol} className="w-9 h-9 rounded-full" />
                   <div className="text-left">
                     <p className="text-sm font-bold">{token.symbol}</p>
                     <p className="text-[11px] text-zinc-500">{token.name}</p>
@@ -731,34 +811,34 @@ export default function TransferPage() {
         </div>
       )}
 
-      {chainPickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setChainPickerOpen(false)}>
+      {(chainPickerOpen || closingChainPicker) && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={closeChainPicker}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative w-full max-w-md bg-surface border border-surfaceLight rounded-t-[28px] p-5 pb-10" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-5">
+          <div className={`${closingChainPicker ? 'swap-token-drawer-out' : 'swap-token-drawer'} relative w-full max-w-md max-h-[75vh] bg-surface border border-surfaceLight rounded-t-[28px] p-5 pb-6 flex flex-col`} onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5 shrink-0">
               <h3 className="text-base font-bold">Select Network</h3>
-              <button onClick={() => setChainPickerOpen(false)} className="w-8 h-8 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400">
+              <button onClick={closeChainPicker} className="w-8 h-8 rounded-full bg-surfaceLight flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
                 <X size={16} />
               </button>
             </div>
-            <div className="flex flex-col gap-2">
-              {POPULAR_CHAINS.map((chain) => (
+            <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col gap-2 pr-1">
+              {allDestChains.map((chain) => (
                 <button
-                  key={chain}
+                  key={chain.id}
                   onClick={() => {
-                    setDestNetwork(chain)
-                    setChainPickerOpen(false)
+                    setDestNetwork(chain.name)
+                    closeChainPicker()
                   }}
                   className={`flex items-center gap-3.5 p-3.5 rounded-[16px] transition-colors ${
-                    destNetwork === chain ? 'bg-surfaceLight border border-white/5' : 'hover:bg-surfaceLight/50'
+                    destNetwork === chain.name ? 'bg-surfaceLight border border-white/5' : 'hover:bg-surfaceLight/50'
                   }`}
                 >
-                  <img src={CHAIN_ICONS[chain]} alt={chain} className="w-9 h-9 rounded-full" />
+                  <img src={chainIconMap[chain.name] || ''} alt={chain.name} className="w-9 h-9 rounded-full" />
                   <div className="text-left">
-                    <p className="text-sm font-bold">{chain}</p>
-                    <p className="text-[11px] text-zinc-500">{getChainType(chain) === 'evm' ? 'EVM' : chain}</p>
+                    <p className="text-sm font-bold">{chain.name}</p>
+                    <p className="text-[11px] text-zinc-500">{getChainType(chain.name) === 'evm' ? 'EVM' : chain.name}</p>
                   </div>
-                  {destNetwork === chain && (
+                  {destNetwork === chain.name && (
                     <div className="ml-auto w-5 h-5 rounded-full bg-neon flex items-center justify-center">
                       <div className="w-2 h-2 rounded-full bg-black" />
                     </div>

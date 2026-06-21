@@ -15,6 +15,8 @@ interface SettingsState extends AppSettings {
   setBiometricUnlock: (v: boolean) => void
   setPushNotifications: (v: boolean) => void
   setTonWalletContractAddr: (v: string) => void
+  customProfileName: string
+  setCustomProfileName: (v: string) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -29,6 +31,8 @@ export const useSettingsStore = create<SettingsState>()(
       biometricUnlock: false,
       pushNotifications: false,
       tonWalletContractAddr: '',
+      customProfileName: '',
+      setCustomProfileName: (v) => set({ customProfileName: v }),
       setMainChain: (v) => set({ mainChain: v }),
       setDarkMode: (v) => set({ darkMode: v }),
       setLocalCurrency: (v) => set({ localCurrency: v }),

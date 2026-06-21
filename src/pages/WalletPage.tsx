@@ -4,6 +4,15 @@ import { useWalletConnection } from '../hooks/useWalletConnection'
 import { useBalances } from '../hooks/useBalances'
 import { useSettingsStore } from '../stores/settingsStore'
 
+function fmtBalance(b: string): string {
+  const n = parseFloat(b)
+  if (n === 0) return '0'
+  if (n >= 1) return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+  if (n >= 0.01) return n.toFixed(4)
+  if (n >= 0.0001) return n.toFixed(6)
+  return n.toFixed(8)
+}
+
 export default function WalletPage() {
   const { ready, authenticated, login } = usePrivy()
   const { evm, solana, ton } = useWalletConnection()
@@ -43,7 +52,7 @@ export default function WalletPage() {
             </div>
             <div className="mb-3 relative z-10">
               <p className="text-[26px] font-bold font-mono tracking-tight">
-                {(() => { const b = tokens.find(t => t.symbol === 'ETH')?.balance ?? '0'; return parseFloat(b) === 0 ? '0' : b })()} <span className="text-sm text-zinc-400 font-sans font-normal">ETH</span>
+                {(() => { const b = tokens.find(t => t.symbol === 'ETH')?.balance ?? '0'; return parseFloat(b) === 0 ? '0' : fmtBalance(b) })()} <span className="text-sm text-zinc-400 font-sans font-normal">ETH</span>
               </p>
               <p className="text-sm text-zinc-500 font-mono mt-0.5">
                 ≈ ${(parseFloat(tokens.find(t => t.symbol === 'ETH')?.balance || '0') * (prices.ETH?.price ?? 0)).toLocaleString()}
@@ -89,7 +98,7 @@ export default function WalletPage() {
             </div>
             <div className="mb-3 relative z-10">
               <p className="text-[22px] font-bold font-mono tracking-tight text-zinc-300">
-                {(() => { const b = tokens.find(t => t.symbol === 'SOL')?.balance ?? '0'; return parseFloat(b) === 0 ? '0' : b })()} <span className="text-sm text-zinc-500 font-sans font-normal">SOL</span>
+                {(() => { const b = tokens.find(t => t.symbol === 'SOL')?.balance ?? '0'; return parseFloat(b) === 0 ? '0' : fmtBalance(b) })()} <span className="text-sm text-zinc-500 font-sans font-normal">SOL</span>
               </p>
               <p className="text-sm text-zinc-500 font-mono mt-0.5">
                 ≈ ${(parseFloat(tokens.find(t => t.symbol === 'SOL')?.balance || '0') * (prices.SOL?.price ?? 0)).toLocaleString()}

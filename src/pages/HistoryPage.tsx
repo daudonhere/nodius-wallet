@@ -41,7 +41,7 @@ export default function HistoryPage() {
     setLoading(true)
     const promises: Promise<Transaction[]>[] = []
 
-    if (evm.address && evm.chainId) {
+    if (evm.address) {
       const chains = evm.chainId ? [evm.chainId] : [1, 137, 42161, 8453]
       for (const c of chains) {
         promises.push(fetchEVMHistory(evm.address, c))
@@ -62,10 +62,18 @@ export default function HistoryPage() {
       return
     }
 
-    const results = await Promise.all(promises)
-    const all = results.flat().sort((a, b) =>
-      new Date(b.date).getTime() - new Date(a.date).getTime()
+    const withTimeout = promises.map((p) =>
+      Promise.race([
+        p,
+        new Promise<Transaction[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10_000)),
+      ])
     )
+
+    const results = await Promise.allSettled(withTimeout)
+    const all = results
+      .filter((r) => r.status === 'fulfilled')
+      .flatMap((r) => r.value)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     setTransactions(all)
     setLoading(false)
   }, [evm.address, evm.chainId, solana.address, tonAddress])

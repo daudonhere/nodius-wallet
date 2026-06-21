@@ -1,9 +1,10 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LayoutGrid, History, Wallet, Settings } from 'lucide-react'
+import { LayoutGrid, History, Wallet, Settings, Coins } from 'lucide-react'
 
 const tabs = [
   { id: 'home', label: 'Home', icon: LayoutGrid, path: '/home' },
   { id: 'history', label: 'History', icon: History, path: '/history' },
+  { id: 'token', label: 'Token', icon: Coins, path: '/trending' },
   { id: 'wallet', label: 'Wallet', icon: Wallet, path: '/wallet' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ] as const
@@ -12,7 +13,7 @@ export default function BottomNavigation() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const homePaths = ['/home', '/swap', '/bridge', '/transfer', '/trending']
+  const homePaths = ['/home', '/swap', '/bridge', '/transfer']
 
   return (
     <nav

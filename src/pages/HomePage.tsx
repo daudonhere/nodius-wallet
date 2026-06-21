@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { QrCode, Bell, Copy, ArrowLeftRight, GitMerge, Upload, ArrowDownToLine, TrendingUp, TrendingDown, Wallet, Coins, Download, X, LoaderCircle } from 'lucide-react'
+import { QrCode, Bell, Copy, ArrowLeftRight, GitMerge, Upload, TrendingUp, TrendingDown, Wallet, Coins, Download, X, LoaderCircle } from 'lucide-react'
 import { useTonAddress } from '@tonconnect/ui-react'
 import { useWalletConnection } from '../hooks/useWalletConnection'
 import { useBalances } from '../hooks/useBalances'
+import { useSettingsStore } from '../stores/settingsStore'
 
 const walletIcons: Record<string, string> = {
   EVM: 'https://cryptologos.cc/logos/versions/ethereum-eth-logo-diamond-purple.svg',
@@ -34,8 +35,9 @@ export default function HomePage() {
   const { privy, evm, solana, user, authenticated } = useWalletConnection()
   const tonAddress = useTonAddress()
 
-  const userPhoto = null
-  const userName = user?.google?.name || user?.github?.name || user?.discord?.username || 'My Wallet'
+  const s = useSettingsStore()
+  const userPhoto = s.customProfileName ? `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(s.customProfileName)}` : null
+  const userName = s.customProfileName || user?.google?.name || user?.github?.name || user?.discord?.username || 'My Wallet'
 
   const totalUsdBalance = tokens.reduce((sum, t) => {
     const price = prices[t.symbol]?.price
@@ -117,13 +119,6 @@ export default function HomePage() {
     return acc
   }, {})
 
-  const handleScroll = () => {
-    const el = scrollRef.current
-    if (!el) return
-    const cardWidth = el.querySelector('div:first-child')?.clientWidth ?? 1
-    setActiveIndex(Math.round(el.scrollLeft / (cardWidth + 16)))
-  }
-
   const getReceiveNote = (wallet: WalletCard) => {
     if (wallet.name === 'Nodius Wallet' && wallet.copyAddress === privy.evmAddress) return 'Use Ethereum, Base, Polygon, or Arbitrum network.'
     if (wallet.name === 'Nodius Wallet' && wallet.copyAddress === privy.solanaAddress) return 'Use Solana network.'
@@ -132,6 +127,14 @@ export default function HomePage() {
     if (wallet.name === 'TON') return 'Use TON network.'
     return 'Use matching wallet network.'
   }
+
+  const handleScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    const cardWidth = el.querySelector('div:first-child')?.clientWidth ?? 1
+    setActiveIndex(Math.round(el.scrollLeft / (cardWidth + 16)))
+  }
+
 
   const SkeletonBlock = ({ className }: { className: string }) => (
     <div className={`animate-pulse rounded-full bg-surfaceLight/70 ${className}`} />
@@ -300,8 +303,8 @@ export default function HomePage() {
       )}
 
       <div className="px-5 mb-8">
-        <div className="grid grid-cols-4 gap-2">
-          {isInitialDataLoading ? [0, 1, 2, 3].map((item) => (
+        <div className="grid grid-cols-3 gap-3">
+          {isInitialDataLoading ? [0, 1, 2].map((item) => (
             <div key={item} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
               <SkeletonBlock className="w-10 h-10" />
               <SkeletonBlock className="w-11 h-3 rounded-md" />
@@ -325,12 +328,6 @@ export default function HomePage() {
                   <Upload size={18} />
                 </div>
                 <span className="text-[11px] font-semibold">Transfer</span>
-              </button>
-              <button onClick={() => wallets[0] && setQrWallet(wallets[0])} disabled={wallets.length === 0} className="bg-surface border rounded-[16px] p-3 flex flex-col items-center justify-center gap-1.5 border-neon hover:border-neon hover:bg-surfaceLight transition-all group disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: 'rgba(204, 255, 0, 0.15)' }}>
-                <div className="w-10 h-10 rounded-full bg-darkbg border border-surfaceLight flex items-center justify-center text-neon group-hover:text-neon group-hover:border-neon transition-colors">
-                  <ArrowDownToLine size={18} />
-                </div>
-                <span className="text-[11px] font-semibold">Receive</span>
               </button>
             </>
           )}

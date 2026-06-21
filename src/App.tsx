@@ -8,6 +8,7 @@ import TrendingPage from './pages/TrendingPage'
 import SwapPage from './pages/SwapPage'
 import BridgePage from './pages/BridgePage'
 import TransferPage from './pages/TransferPage'
+import ProcessingPage from './pages/ProcessingPage'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/bridge" element={<BridgePage />} />
             <Route path="/transfer" element={<TransferPage />} />
             <Route path="/trending" element={<TrendingPage />} />
+            <Route path="/processing" element={<ProcessingPage />} />
           </Routes>
         </div>
       </div>

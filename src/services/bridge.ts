@@ -27,7 +27,7 @@ let tokenListLoading: Record<number, Promise<any[]>> = {}
 let chainsCache: BridgeChain[] | null = null
 let chainsLoading: Promise<BridgeChain[]> | null = null
 
-async function loadLifiTokens(chainId: number): Promise<any[]> {
+export async function loadLifiTokens(chainId: number): Promise<any[]> {
   if (tokenListCache[chainId]) return tokenListCache[chainId]
   if (typeof tokenListLoading[chainId] !== 'undefined') return tokenListLoading[chainId]
 
@@ -104,7 +104,8 @@ export async function getBridgeQuote(
   toToken: string,
   fromAmount: string,
   fromAddress: string,
-  toAddress?: string
+  toAddress?: string,
+  slippage?: string,
 ): Promise<BridgeQuote | null> {
   const params = new URLSearchParams({
     fromChain: String(fromChain),
@@ -115,12 +116,32 @@ export async function getBridgeQuote(
     fromAddress,
   })
   if (toAddress) params.set('toAddress', toAddress)
+  if (slippage && slippage !== 'Auto') {
+    params.set('slippage', (parseFloat(slippage) / 100).toString())
+  }
 
   try {
     const res = await fetch(`${LIFI_API}/quote?${params}`)
     if (!res.ok) return null
     const data = await res.json()
-    return data as BridgeQuote
+    const normEstimate = data.estimate ? {
+      ...data.estimate,
+      gasCosts: data.estimate.gasCosts?.map((gc: any) => ({
+        amount: gc.amount,
+        amountUsd: gc.amountUsd ?? gc.amountUSD,
+        estimate: gc.estimate,
+      })) || [],
+    } : undefined
+    return {
+      estimatedToAmount: data.estimate?.toAmount || '0',
+      estimatedFromAmount: data.action?.fromAmount || '0',
+      toToken: data.action?.toToken,
+      fromToken: data.action?.fromToken,
+      estimate: normEstimate as BridgeQuote['estimate'],
+      transactionRequest: data.transactionRequest,
+      route: data.toolDetails?.name || data.tool || 'LI.FI',
+      tool: data.tool,
+    } as BridgeQuote
   } catch {
     return null
   }
