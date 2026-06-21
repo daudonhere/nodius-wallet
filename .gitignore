@@ -8,4 +8,5 @@ backend/dist/
 npm-debug.log*
 .env*
 AGENTS.md
+TODO.md
 opencode.json
