@@ -14,10 +14,10 @@ import QrScannerModal from '../components/QrScannerModal'
 import { useTransfer } from '../hooks/useTransfer'
 import { useBalances } from '../hooks/useBalances'
 import { useSettingsStore } from '../stores/settingsStore'
-import { getBridgeQuote, resolveDestToken, type BridgeQuote } from '../services/bridge'
-import { DEBRIDGE_SOLANA_CHAIN_ID, DEBRIDGE_TON_CHAIN_ID, getDebridgeQuote as getDebridgeQuoteApi, getDebridgeTx, type DebridgeQuoteResult } from '../services/debridge'
-
+import { getBridgeQuote, getBridgeStatus, resolveDestToken, type BridgeQuote } from '../services/bridge'
+import { DEBRIDGE_SOLANA_CHAIN_ID, DEBRIDGE_TON_CHAIN_ID, getDebridgeQuote as getDebridgeQuoteApi, getDebridgeTx, getDebridgeStatus, type DebridgeQuoteResult } from '../services/debridge'
 import { submitRelayTx } from '../services/relay'
+import { notifyTxConfirmed, notifyTxFailed } from '../services/notifications'
 
 const CHAIN_ICONS: Record<string, string> = {
   Ethereum: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
@@ -265,6 +265,9 @@ export default function TransferPage() {
           const signedBytes: Uint8Array = signedResult.signedTransaction ?? signedResult.transaction ?? signedResult
           const serialized = Buffer.from(signedBytes).toString('hex')
           await submitRelayTx({ walletId: solana.address, source: 'solana', chainId: 900, signedTx: serialized })
+          if (useSettingsStore.getState().pushNotifications && txRes.orderId) {
+            setPendingCrossInfo({ orderId: txRes.orderId, type: 'debridge' })
+          }
           transfer.reset()
           setLoadingQuote(false); setBridgeQuote(null); setDebridgeQuote(null)
           return
@@ -297,6 +300,9 @@ export default function TransferPage() {
         } else {
           await sendTransaction({ to: txRes.evmTx.to as `0x${string}`, data: txRes.evmTx.data as `0x${string}`, value: BigInt(txRes.evmTx.value || '0') })
         }
+        if (useSettingsStore.getState().pushNotifications && txRes.orderId) {
+          setPendingCrossInfo({ orderId: txRes.orderId, type: 'debridge' })
+        }
         transfer.reset()
         setLoadingQuote(false); setBridgeQuote(null); setDebridgeQuote(null)
         return
@@ -304,6 +310,7 @@ export default function TransferPage() {
 
       if (bridgeQuote?.transactionRequest) {
         if (!evm.address || !evm.chainId) return
+        let lifiTxHash = ''
         if (gasFreeAvailable) {
           const { signature } = await signTypedData({
             domain: { name: 'NodiusRelay', version: '1', chainId: evm.chainId, verifyingContract: bridgeQuote.transactionRequest.to as `0x${string}` },
@@ -320,9 +327,14 @@ export default function TransferPage() {
               deadline: `0x${BigInt(Math.floor(Date.now() / 1000) + 3600).toString(16)}`,
             },
           })
-          await submitRelayTx({ walletId: evm.address, source: 'evm', chainId: evm.chainId, signedTx: signature })
+          const result = await submitRelayTx({ walletId: evm.address, source: 'evm', chainId: evm.chainId, signedTx: signature })
+          lifiTxHash = result.txHash || ''
         } else {
-          await sendTransaction({ to: bridgeQuote.transactionRequest.to as `0x${string}`, data: bridgeQuote.transactionRequest.data as `0x${string}`, value: BigInt(bridgeQuote.transactionRequest.value || '0'), chainId: bridgeQuote.transactionRequest.chainId })
+          const { hash } = await sendTransaction({ to: bridgeQuote.transactionRequest.to as `0x${string}`, data: bridgeQuote.transactionRequest.data as `0x${string}`, value: BigInt(bridgeQuote.transactionRequest.value || '0'), chainId: bridgeQuote.transactionRequest.chainId })
+          lifiTxHash = hash
+        }
+        if (lifiTxHash && useSettingsStore.getState().pushNotifications) {
+          setPendingCrossInfo({ txHash: lifiTxHash, tool: bridgeQuote.tool || 'lifi', type: 'lifi' })
         }
         transfer.reset()
         setLoadingQuote(false); setBridgeQuote(null); setDebridgeQuote(null)
@@ -339,6 +351,43 @@ export default function TransferPage() {
       return () => clearTimeout(timer)
     }
   }, [isCrossTransfer, address, amount, currentSourceToken.address, currentSourceToken.symbol, currentSourceToken.chainName, destToken.symbol, destNetwork])
+
+  const [pendingCrossInfo, setPendingCrossInfo] = useState<{
+    txHash?: string; orderId?: string; tool?: string; type: 'lifi' | 'debridge'
+  } | null>(null)
+
+  useEffect(() => {
+    if (!pendingCrossInfo) return
+    const poll = async () => {
+      try {
+        let resolved = false
+        if (pendingCrossInfo.type === 'lifi' && pendingCrossInfo.txHash && pendingCrossInfo.tool) {
+          const status = await getBridgeStatus(pendingCrossInfo.tool, pendingCrossInfo.txHash)
+          if (status === 'DONE' || status === 'completed') {
+            notifyTxConfirmed(pendingCrossInfo.txHash, 'LI.FI')
+            resolved = true
+          } else if (status === 'FAILED' || status?.toLowerCase().includes('fail')) {
+            notifyTxFailed(pendingCrossInfo.txHash, 'LI.FI')
+            resolved = true
+          }
+        }
+        if (pendingCrossInfo.type === 'debridge' && pendingCrossInfo.orderId) {
+          const status = await getDebridgeStatus(pendingCrossInfo.orderId)
+          if (status && (status.includes('Fulfilled') || status.includes('Sent') || status === 'completed')) {
+            notifyTxConfirmed(pendingCrossInfo.orderId, 'deBridge')
+            resolved = true
+          } else if (status && (status.includes('Failed') || status.includes('Cancelled'))) {
+            notifyTxFailed(pendingCrossInfo.orderId, 'deBridge')
+            resolved = true
+          }
+        }
+        if (resolved) setPendingCrossInfo(null)
+      } catch {}
+    }
+    const id = setInterval(poll, 15000)
+    poll()
+    return () => clearInterval(id)
+  }, [pendingCrossInfo])
 
   const handleQrScan = (scanned: string) => {
     if (scanned?.trim()) setAddress(scanned.trim())

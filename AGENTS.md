@@ -172,6 +172,8 @@ contracts/
 ✅ **Unused stores removed.** `transactionStore.ts` deleted.
 ✅ **Transfer cross-chain/cross-token live.** TransferPage refactored — source token picker shows all chains, dest chain independent, auto-fetch quote via LI.FI/deBridge, button 3-state (Get Quote → Execute Transfer → Sending). EVM→EVM uses LI.FI, EVM↔Solana/TON uses deBridge, Solana→EVM uses `useSignTransaction` + relay.
 ✅ **Solana transfer gas sponsorship.** Backend `buildSponsoredSolanaTransfer()` builds `SystemProgram.transfer` with relayer as fee payer + partial sign. Frontend `useTransfer.ts` `sendSolana` calls sponsored endpoint when `gasFeeRouting` enabled. Same-chain SOL transfer now **free** (relayer bayar gas).
+✅ **Cross-chain notifications.** TransferPage polls LI.FI (`getBridgeStatus`) and deBridge (`getDebridgeStatus`) after cross-chain execution; notifies confirmed/failed.
+✅ **Gas pool monitoring Solana/TON.** Worker checks SOL balance via RPC `getBalance` and TON balance via TonAPI. Gas pool entries auto-created on startup.
 
 ## Gas-Free Bridge — Status per Chain
 
@@ -203,9 +205,16 @@ contracts/
 - Bridge TON→Solana / Solana→TON: **belum ada provider.**
 
 ### 🟡 Lainnya
-- [ ] **Gas pool monitoring** untuk Solana & TON (currently EVM-only).
 - [ ] **Integrate wallet contract address** ke frontend (user deploys once, stores address).
 - [ ] **Token verification/allowlist** — stronger spam filtering still needed for production.
+
+### ❌ Not Feasible (Provider Limitations)
+| Item | Alasan |
+|------|--------|
+| TON deBridge broadcast (TON→EVM) | deBridge ga punya TON broadcast API — user claim manual via DLN interface |
+| Solana↔TON bridge | Belum ada provider yg support rute ini |
+| TON gasless wallet sign | TonConnect UI ga punya `signData` API — user ga bisa sign arbitrary data utk sponsored swap. Workaround: browser ed25519 keypair di settings (non-custodial, BUKAN wallet TON mereka) |
+| Solana deBridge gas sponsorship | VersionedTransaction fee payer di-set oleh deBridge API; rebuild butuh address lookup tables dari RPC. Fee Solana cuma ~$0.0001, ROI implementasi rendah |
 
 ## Notable
 
