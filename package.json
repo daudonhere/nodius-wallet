@@ -24,6 +24,7 @@
     "@ton/ton": "^16.3.0",
     "@tonconnect/ui-react": "^3.0.0",
     "buffer": "^6.0.3",
+    "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.18.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

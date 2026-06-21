@@ -13,7 +13,7 @@ import {
 } from './relayer'
 import { getRelayContractAddress, getRelayerAddress, getRelayerBalance } from './relayContract'
 import { getSponsoredRelayerInfo } from './sponsoredRelayers'
-import { buildSponsoredSolanaSwap } from './solanaSponsor'
+import { buildSponsoredSolanaSwap, buildSponsoredSolanaTransfer } from './solanaSponsor'
 import { buildSignedExecuteBody, sendTonExternalMessage } from './tonSponsor'
 import { initDb } from './db/index'
 import { startWorker } from './worker'
@@ -84,6 +84,20 @@ app.post('/relay/sponsored-solana-swap', async (c) => {
     return c.json(result)
   } catch (err: any) {
     return c.json({ error: err.message || 'Sponsored Solana swap failed' }, 500)
+  }
+})
+
+app.post('/relay/sponsored-solana-transfer', async (c) => {
+  const { to, lamports, userAddress } = await c.req.json()
+  if (!to || lamports == null || !userAddress) {
+    return c.json({ error: 'Missing required fields: to, lamports, userAddress' }, 400)
+  }
+
+  try {
+    const result = await buildSponsoredSolanaTransfer(to, Number(lamports), userAddress)
+    return c.json(result)
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Sponsored Solana transfer failed' }, 500)
   }
 })
 

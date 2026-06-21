@@ -170,6 +170,8 @@ contracts/
 ✅ **Bridge aggregator buttons real.** Both 0x and LI.FI fetch from LI.FI API (0x doesn't support cross-chain). Routes show actual bridge provider name.
 ✅ **Bridge Solana + TON via deBridge.** deBridge API integrated for Solana↔EVM and TON↔EVM bridging. Source chain auto-detects EVM→EVM (LI.FI) vs non-EVM (deBridge). Dest chains include Solana/TON for EVM tokens, and EVM chains for Solana/TON tokens. Solana execution uses `useSignTransaction` + relay submit. TON execution shows manual claim instructions.
 ✅ **Unused stores removed.** `transactionStore.ts` deleted.
+✅ **Transfer cross-chain/cross-token live.** TransferPage refactored — source token picker shows all chains, dest chain independent, auto-fetch quote via LI.FI/deBridge, button 3-state (Get Quote → Execute Transfer → Sending). EVM→EVM uses LI.FI, EVM↔Solana/TON uses deBridge, Solana→EVM uses `useSignTransaction` + relay.
+✅ **Solana transfer gas sponsorship.** Backend `buildSponsoredSolanaTransfer()` builds `SystemProgram.transfer` with relayer as fee payer + partial sign. Frontend `useTransfer.ts` `sendSolana` calls sponsored endpoint when `gasFeeRouting` enabled. Same-chain SOL transfer now **free** (relayer bayar gas).
 
 ## Gas-Free Bridge — Status per Chain
 
@@ -183,21 +185,26 @@ contracts/
 | Solana→TON | Not supported yet | ❌ | ❌ | **Belum** |
 | TON→Solana | Not supported yet | ❌ | ❌ | **Belum** |
 
-## Backlog — Yang Perlu Dikerjakan
+## Persiapan — Biar Swap & Bridge Jalan untuk EVM, Solana, TON
 
-### 🔴 High Priority
-- [ ] **Fund Solana relayer** — kirim SOL ke `9ErX5EiqVtr9Hr9G4y3kiJxm7xvXUL1dLjrmnXQgaUq1` agar sponsored swap jalan.
-- [ ] **Fund & deploy TonGaslessWallet** — kirim test TON ke `EQCUhWYp6TZ_hAo6hoQa32U86ktKRepuEt9HXDU7hnv78wip`, lalu `npm run deploy` di `ton-contracts/`.
+### EVM ✅ Udah siap
+- Swap (0x/LI.FI) + bridge (LI.FI EVM↔EVM, deBridge EVM→Solana/TON) + gas sponsorship via EIP-712 meta-tx — **semua jalan tanpa persiapan tambahan.**
 
-### 🟡 Medium Priority
-- [ ] **TON frontend sponsored** — blocked karena TonConnect UI tidak punya `signData`. Alternatif: custom signing via TON wallet raw methods atau tunggu TonConnect update.
+### Solana 🔴 Perlu 1 hal
+- [ ] **Fund relayer** — kirim SOL ke `9ErX5EiqVtr9Hr9G4y3kiJxm7xvXUL1dLjrmnXQgaUq1`
+- **Setelah itu:** Jupiter swap + same-chain SOL transfer + Solana→EVM / EVM→Solana bridge langsung **100% jalan.**
+- Same-chain SOL transfer sponsored (relayer bayar gas). SPL transfer dan Solana→EVM cross-chain masih bayar SOL fee.
+
+### TON ⚠️ Partial meski funded & deployed
+- [ ] **Fund deployer** — kirim test TON ke `EQCUhWYp6TZ_hAo6hoQa32U86ktKRepuEt9HXDU7hnv78wip`
+- [ ] **Deploy contract** — `npm run deploy` di `ton-contracts/`
+- **TAPI:** Swap sponsored tetap **tidak seamless** karena TonConnect ga punya `signData`. Workaround: browser ed25519 keypair (tweetnacl) — user generate keypair di settings, BUKAN pake wallet TON mereka.
+- Bridge TON→EVM: deBridge ga punya TON broadcast — **user claim manual** via DLN interface.
+- Bridge TON→Solana / Solana→TON: **belum ada provider.**
+
+### 🟡 Lainnya
 - [ ] **Gas pool monitoring** untuk Solana & TON (currently EVM-only).
-
-### 🟢 Low Priority
-- [ ] **Hapus unused stores** — `transactionStore.ts` masih tidak pakai.
 - [ ] **Integrate wallet contract address** ke frontend (user deploys once, stores address).
-
-### 🟠 Portfolio / Balance
 - [ ] **Token verification/allowlist** — stronger spam filtering still needed for production.
 
 ## Notable
@@ -209,7 +216,7 @@ contracts/
 - Privy bundle is large (PWA workbox limit increased to 4 MB).
 - TON wallet kept independent — Privy doesn't support TON.
 - **TON relay limitation** — TonConnect UI (`@tonconnect/ui-react`) tidak punya `signData` API, jadi user tidak bisa sign arbitrary data untuk sponsored swap. Contract + backend infra sudah siap, menunggu workaround atau TonConnect update.
-- **Solana fee sponsorship** — backend `solanaSponsor.ts` build Jupiter swap dengan relayer sebagai fee payer, sign partial, return partially-signed tx. User sign sisanya di frontend via `useSignTransaction`, kirim fully-signed ke `/relay/submit`.
+- **Solana fee sponsorship** — backend `solanaSponsor.ts` build Jupiter swap dengan relayer sebagai fee payer, sign partial, return partially-signed tx. User sign sisanya di frontend via `useSignTransaction`, kirim fully-signed ke `/relay/submit`. Juga ada `buildSponsoredSolanaTransfer()` untuk same-chain SOL transfer — relayer sebagai fee payer, user sign sisanya.
 - **Relayer keys sudah diisi** — `SOLANA_RELAYER_PRIVATE_KEY` dan `TON_RELAYER_MNEMONIC` sudah ada di `backend/.env`. Solana relayer pubkey: `9ErX5EiqVtr9Hr9G4y3kiJxm7xvXUL1dLjrmnXQgaUq1`. TON deployer (testnet): `EQCUhWYp6TZ_hAo6hoQa32U86ktKRepuEt9HXDU7hnv78wip`.
 - **TonGaslessWallet compiled** — ada di `ton-contracts/build/`, tinggal fund deployer dan `npm run deploy`.
 - **Bridge deBridge integration** — `src/services/debridge.ts` menggunakan deBridge DLN API (`POST /v1.0/order/quote`, `POST /v1.0/order/create-tx`). Mendukung Solana↔EVM dan TON↔EVM. Solana execution: deBridge create-tx → Solana tx base64 → `useSignTransaction` → `submitRelayTx`. EVM execution: deBridge create-tx → `sendTransaction` atau EIP-712 meta-tx. TON execution: manual claim requirement via deBridge DLN interface.

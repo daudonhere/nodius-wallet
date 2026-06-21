@@ -103,7 +103,8 @@ export async function getBridgeQuote(
   fromToken: string,
   toToken: string,
   fromAmount: string,
-  fromAddress: string
+  fromAddress: string,
+  toAddress?: string
 ): Promise<BridgeQuote | null> {
   const params = new URLSearchParams({
     fromChain: String(fromChain),
@@ -113,6 +114,7 @@ export async function getBridgeQuote(
     fromAmount,
     fromAddress,
   })
+  if (toAddress) params.set('toAddress', toAddress)
 
   try {
     const res = await fetch(`${LIFI_API}/quote?${params}`)

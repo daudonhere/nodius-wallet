@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSendTransaction, useSignTypedData } from '@privy-io/react-auth'
-import { useSignAndSendTransaction } from '@privy-io/react-auth/solana'
+import { useSignAndSendTransaction, useSignTransaction } from '@privy-io/react-auth/solana'
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react'
 import { Connection, Transaction as SolanaTx, SystemProgram, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js'
 import { transferTON } from '../services/transfer'
@@ -22,6 +22,7 @@ export function useTransfer() {
   const { sendTransaction: privySendTx } = useSendTransaction()
   const { signTypedData } = useSignTypedData()
   const { signAndSendTransaction: solanaSignAndSend } = useSignAndSendTransaction()
+  const { signTransaction: solanaSign } = useSignTransaction()
   const tonAddress = useTonAddress()
   const [tonUI] = useTonConnectUI()
 
@@ -129,19 +130,25 @@ export function useTransfer() {
       const conn = new Connection(import.meta.env.VITE_SOLANA_RPC || 'https://api.mainnet-beta.solana.com')
 
       if (gasFeeRouting) {
-        const ix = SystemProgram.transfer({
-          fromPubkey: new PublicKey(solAddress),
-          toPubkey: new PublicKey(to),
-          lamports,
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
+        const res = await fetch(`${BACKEND_URL}/relay/sponsored-solana-transfer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to, lamports, userAddress: solAddress }),
         })
-        const blockhash = await conn.getLatestBlockhash()
-        const tx = new SolanaTx({
-          feePayer: new PublicKey(solAddress),
-          blockhash: blockhash.blockhash,
-          lastValidBlockHeight: blockhash.lastValidBlockHeight,
-        }).add(ix)
-        const signed = await solana.wallet.signTransaction({ transaction: tx.serialize() })
-        const serialized = Array.from(signed.signedTransaction).map((b) => b.toString(16).padStart(2, '0')).join('')
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Sponsored Solana transfer failed')
+        }
+        const { partiallySignedTx } = await res.json()
+        const txBytes = new Uint8Array(partiallySignedTx.match(/.{1,2}/g)!.map((b: string) => parseInt(b, 16)))
+        const signedResult = await solanaSign({
+          transaction: txBytes,
+          wallet: solana.wallet as any,
+          chain: 'solana:mainnet',
+        })
+        const signedBytes: Uint8Array = (signedResult as any).signedTransaction ?? signedResult
+        const serialized = Buffer.from(signedBytes).toString('hex')
         setState('broadcasting')
         const result = await submitRelayTx({
           walletId: solAddress,
