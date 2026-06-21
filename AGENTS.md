@@ -50,7 +50,7 @@ src/
 ├── pages/            Home, Swap, Bridge, Transfer, History, Wallet, Settings, Trending
 ├── providers/        WalletProvider (PrivyProvider + TonConnectUIProvider)
 ├── services/         API integrations (price/CoinGecko, transfer, swap/0x+Jupiter, bridge/LI.FI, notifications, relay)
-├── stores/           Zustand stores (walletStore, settingsStore, transactionStore, addressStore, alertStore)
+├── stores/           Zustand stores (walletStore, settingsStore, addressStore, alertStore)
 ├── types/            Shared TypeScript types (wallet, token, transaction, chain, settings, address)
 ├── App.tsx           Routes config
 └── main.tsx          Entry with WalletProvider wrapper
@@ -161,20 +161,27 @@ contracts/
 ✅ **Swap UX upgraded.** Swap token selector modal added, slippage has state, quote auto-fetches with debounce.
 ✅ **TON basics upgraded.** TON balance fetch added, TON disconnect uses `tonUI.disconnect()`, TON history fetch uses TonAPI.
 ✅ **Relayer gaps reduced.** Solana relay path no longer uses `eth_sendRawTransaction`, raw relay inserts pending then updates submitted/failed, worker chain list synced with Sepolia/Base Sepolia, gas pool syncs live relayer balance, `RELAYER_PRIVATE_KEY` guard added.
-✅ **Bridge cleanup done.** Bridge uses EVM-only clean path and status check after submit.
+✅ **Bridge cleanup done.** Bridge uses EVM-only clean path with gas sponsorship (EIP-712 meta-tx), route shows actual LI.FI tool name (`quote.tool`), Network Fee Free badge functional via `gasFreeAvailable` flag.
 ✅ **Portfolio scan upgraded.** Home balances use Alchemy for EVM native/ERC-20 across Ethereum/Base/Polygon/Arbitrum, Helius for Solana SPL, TonAPI for TON jettons; Home hides tokens without USD price to reduce spam/scam tokens.
 ✅ **Solana sponsored swap.** Backend `POST /relay/sponsored-solana-swap` builds Jupiter swap tx with relayer as fee payer, returns partially signed tx. Frontend signs user portion and submits via relay.
 ✅ **TON gasless wallet contract.** `TonGaslessWallet.tact` — AA wallet with external message support + ed25519 signature verification. Backend `tonSponsor.ts` + `POST /relay/sponsored-ton-swap` endpoint ready.
+✅ **Bridge gas sponsorship functional.** EVM bridge LI.FI tx wrapped in EIP-712 meta-tx and submitted via relay contract. Network Fee line-through + Free badge shown when `gasFreeAvailable` (gasFeeRouting enabled + EVM source chain).
+✅ **Bridge Route shows tool name.** Route row displays `quote.tool` (e.g., "Across", "Stargate") from LI.FI quote instead of generic aggregator name.
+✅ **Bridge aggregator buttons real.** Both 0x and LI.FI fetch from LI.FI API (0x doesn't support cross-chain). Routes show actual bridge provider name.
+✅ **Bridge Solana + TON via deBridge.** deBridge API integrated for Solana↔EVM and TON↔EVM bridging. Source chain auto-detects EVM→EVM (LI.FI) vs non-EVM (deBridge). Dest chains include Solana/TON for EVM tokens, and EVM chains for Solana/TON tokens. Solana execution uses `useSignTransaction` + relay submit. TON execution shows manual claim instructions.
+✅ **Unused stores removed.** `transactionStore.ts` deleted.
 
-## Gas-Free Swap — Status per Chain
+## Gas-Free Bridge — Status per Chain
 
-| Chain | Mech | Frontend | Backend | Contract | Status |
-|-------|------|----------|---------|----------|--------|
-| EVM | EIP-712 meta-tx via relay contract | ✅ | ✅ | ✅ Deployed | **Siap — tinggal test** |
-| Solana | Backend build swap tx dgn relayer sbg fee payer, user sign partial | ✅ | ✅ | N/A (no contract needed) | **Siap — isi SOL ke relayer** |
-| TON | External message ke TonGaslessWallet contract (ed25519 verify) | ❌ Blocked* | ✅ | ✅ Compiled | **Siap deploy — isi test TON + deploy** |
-
-*\*TON frontend blocked: TonConnect `@tonconnect/ui-react` tidak punya `signData` API. Swap tetap bisa via normal TonConnect flow (user bayar fee sendiri).*
+| Chain | Mech | Frontend | Backend | Status |
+|-------|------|----------|---------|--------|
+| EVM↔EVM | LI.FI API + EIP-712 meta-tx | ✅ | ✅ | **Siap** |
+| Solana→EVM | deBridge API + Solana sign + relay submit | ✅ | ✅ (relay) | **Siap — isi SOL ke relayer** |
+| EVM→Solana | deBridge API + EVM sendTransaction / meta-tx | ✅ | ✅ | **Siap** |
+| TON→EVM | deBridge API (manual claim instructions) | ✅ | ❌ (no broadcast) | **Partial — TON side menunggu deBridge claim** |
+| EVM→TON | deBridge API + EVM sendTransaction / meta-tx | ✅ | ✅ | **Siap** |
+| Solana→TON | Not supported yet | ❌ | ❌ | **Belum** |
+| TON→Solana | Not supported yet | ❌ | ❌ | **Belum** |
 
 ## Backlog — Yang Perlu Dikerjakan
 
@@ -205,9 +212,10 @@ contracts/
 - **Solana fee sponsorship** — backend `solanaSponsor.ts` build Jupiter swap dengan relayer sebagai fee payer, sign partial, return partially-signed tx. User sign sisanya di frontend via `useSignTransaction`, kirim fully-signed ke `/relay/submit`.
 - **Relayer keys sudah diisi** — `SOLANA_RELAYER_PRIVATE_KEY` dan `TON_RELAYER_MNEMONIC` sudah ada di `backend/.env`. Solana relayer pubkey: `9ErX5EiqVtr9Hr9G4y3kiJxm7xvXUL1dLjrmnXQgaUq1`. TON deployer (testnet): `EQCUhWYp6TZ_hAo6hoQa32U86ktKRepuEt9HXDU7hnv78wip`.
 - **TonGaslessWallet compiled** — ada di `ton-contracts/build/`, tinggal fund deployer dan `npm run deploy`.
+- **Bridge deBridge integration** — `src/services/debridge.ts` menggunakan deBridge DLN API (`POST /v1.0/order/quote`, `POST /v1.0/order/create-tx`). Mendukung Solana↔EVM dan TON↔EVM. Solana execution: deBridge create-tx → Solana tx base64 → `useSignTransaction` → `submitRelayTx`. EVM execution: deBridge create-tx → `sendTransaction` atau EIP-712 meta-tx. TON execution: manual claim requirement via deBridge DLN interface.
 
 ## Scan Summary
 
-- File inti yang sudah discan: `HomePage`, `SettingsPage`, `SwapPage`, `TransferPage`, `BridgePage`, `HistoryPage`, `WalletPage`, hooks utama, services `swap/relay/bridge/transfer`, backend `index/relayer/relayContract/worker`, contract `NodiusRelay.sol`.
+- File inti yang sudah discan: `HomePage`, `SettingsPage`, `SwapPage`, `TransferPage`, `BridgePage`, `HistoryPage`, `WalletPage`, hooks utama, services `swap/relay/bridge/debridge/transfer`, backend `index/relayer/relayContract/worker`, contract `NodiusRelay.sol`.
 - File yang belum discan detail penuh: semua `src/components/*`, `src/stores/*`, `src/types/*`, `src/providers/*`, `App.tsx`, `main.tsx`, `services/price/explorer/notifications`, `backend/src/db/*`, `contracts/scripts/*`.
 
