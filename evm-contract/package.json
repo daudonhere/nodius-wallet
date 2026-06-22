@@ -1,5 +1,5 @@
 {
-  "name": "nodius-contracts",
+  "name": "nodius-evm-contract",
   "private": true,
   "version": "0.1.0",
   "scripts": {

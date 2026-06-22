@@ -1,0 +1,12 @@
+[toolchain]
+anchor_version = "0.30.1"
+
+[programs.devnet]
+nodius_relay = "Gn5qgu9TVMZiQXxspugbzVKEJZRx7fEiGCw8c472Rq18"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "npx ts-mocha -p tests/tsconfig.json tests/**/*.ts"

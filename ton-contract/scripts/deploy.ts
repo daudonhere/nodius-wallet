@@ -4,20 +4,20 @@ import { Address, beginCell } from '@ton/core'
 import fs from 'fs'
 import { TonGaslessWallet } from '../build/TonGaslessWallet_TonGaslessWallet'
 
-// Load .env dari project root
-const envPath = './.env'
-if (fs.existsSync(envPath)) {
-  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
-    const m = line.match(/^([^=]+)=(.*)$/)
-    if (m) process.env[m[1].trim()] = m[2].trim()
+for (const envPath of ['./.env', '../nodius-backend/.env']) {
+  if (fs.existsSync(envPath)) {
+    for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+      const m = line.match(/^([^=]+)=(.*)$/)
+      if (m && !process.env[m[1].trim()]) process.env[m[1].trim()] = m[2].trim()
+    }
   }
 }
 
 const TON_CENTER_API = 'https://testnet.toncenter.com/api/v2/jsonRPC'
 
 async function main() {
-  const mnemonic = process.env.TON_DEPLOYER_MNEMONIC
-  if (!mnemonic) throw new Error('TON_DEPLOYER_MNEMONIC not set')
+  const mnemonic = process.env.TON_DEPLOYER_MNEMONIC || process.env.TON_RELAYER_MNEMONIC
+  if (!mnemonic) throw new Error('TON_DEPLOYER_MNEMONIC or TON_RELAYER_MNEMONIC not set')
 
   const key = await mnemonicToPrivateKey(mnemonic.trim().split(/\s+/))
   const deployer = WalletContractV4.create({ workchain: 0, publicKey: key.publicKey })
@@ -26,7 +26,7 @@ async function main() {
   const deployerBalance = await client.getBalance(deployer.address)
 
   console.log('Deployer address:', deployer.address.toString())
-  console.log('Balance:', deployerBalance > 0n ? `${deployerBalance} TON` : '0 (need test TON from faucet)')
+  console.log('Balance:', deployerBalance > 0n ? `${Number(deployerBalance) / 1e9} TON` : '0 (need test TON from faucet)')
 
   if (deployerBalance < 100_000_000n) {
     console.log('\n⚠️  Deployer needs test TON. Get from:')

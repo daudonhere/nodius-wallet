@@ -12,16 +12,22 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.0.0",
-    "@libsql/client": "^0.14.0",
+    "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^1.4.0",
+    "@supabase/server": "^1.1.0",
+    "@supabase/supabase-js": "^2.108.2",
     "@solana/web3.js": "^1.98.4",
     "@ton/crypto": "^3.3.0",
     "@ton/ton": "^16.3.0",
-    "drizzle-orm": "^0.30.10",
+    "dotenv": "^17.4.2",
     "hono": "^4.0.0",
-    "viem": "^2.52.2"
+    "viem": "^2.52.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.30.0",
+    "@types/node": "^26.0.0",
+    "drizzle-kit": "^0.30.6",
+    "drizzle-orm": "^0.38.0",
     "tsx": "^4.0.0",
     "typescript": "^6.0.0"
   }
