@@ -25,7 +25,10 @@ export async function sendTonExternalMessage(
 ): Promise<string> {
   if (!hasTonRelayer()) throw new Error('TON relayer not configured')
 
-  const client = new TonClient({ endpoint: TON_CENTER_API })
+  const client = new TonClient({
+    endpoint: TON_CENTER_API,
+    apiKey: process.env.TONCENTER_API_KEY,
+  })
   const contract = { address: Address.parse(walletAddress) }
 
   await client.sendExternalMessage(contract, bodyCell)

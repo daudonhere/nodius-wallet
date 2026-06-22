@@ -22,7 +22,10 @@ async function main() {
   const key = await mnemonicToPrivateKey(mnemonic.trim().split(/\s+/))
   const deployer = WalletContractV4.create({ workchain: 0, publicKey: key.publicKey })
 
-  const client = new TonClient({ endpoint: TON_CENTER_API })
+  const client = new TonClient({
+    endpoint: TON_CENTER_API,
+    apiKey: process.env.TONCENTER_API_KEY,
+  })
   const deployerBalance = await client.getBalance(deployer.address)
 
   console.log('Deployer address:', deployer.address.toString())
